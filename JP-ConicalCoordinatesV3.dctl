@@ -1,0 +1,73 @@
+//Modified by Juan Pablo Zambrano
+
+
+DEFINE_UI_PARAMS(DIRECTION, Direction, DCTLUI_COMBO_BOX, 0, {Forward, Inverse}, {RGB to Spherical, Spherical to RGB})
+
+
+__DEVICE__ float3 rgb_to_spherical(float3 rgb) {
+    const float pi= 3.14159265359;
+    const float rtr = rgb.x * 0.81649658f + rgb.y * -0.40824829f + rgb.z * -0.40824829f;
+    const float rtg = rgb.x * 0.0f + rgb.y * 0.70710678f + rgb.z * -0.70710678f;
+    const float rtb = rgb.x * 0.57735027f + rgb.y * 0.57735027f + rgb.z * 0.57735027f;
+
+    const float art = _atan2f(rtg, rtr);
+
+    const float sphr = _sqrtf(rtr*rtr + rtg*rtg + rtb*rtb);
+    const float spht = art < 0.0f ? art + 2.0f * 3.141592653589f : art;
+    const float sphp = _atan2f(_sqrtf(rtr*rtr + rtg*rtg), rtb);
+
+
+    const float huecoef1= 1/(2-(_asinf(1/_sqrtf(2))/_asinf(1/_sqrtf(3))));
+    const float huecoef2 = 2*sphp*_sinf((2*pi/3)-_fmod(spht,(pi/3)))/sqrtf(3);
+    const float huemag =((_acosf(_cosf(3*spht+pi)))/(pi*huecoef1)+(((_asinf(1/_sqrtf(2))/_asinf(1/_sqrtf(3))))-1))*huecoef2;
+    const float satmag = _sinf(huemag+_asinf(1/_sqrtf(3)));
+
+
+
+    return make_float3(
+        sphr*satmag,
+        spht * 0.15915494309189535f,
+        sphp * 1.0467733744265997f
+    );
+}
+
+__DEVICE__ float3 spherical_to_rgb(float3 sph) {
+    const float pi= 3.14159265359;
+   
+
+
+    sph.y *= 6.283185307179586f;
+    sph.z *= 0.9553166181245093f;
+const float huecoef1= 1/(2-(_asinf(1/_sqrtf(2))/_asinf(1/_sqrtf(3))));
+    const float huecoef2 = 2*sph.z*_sinf((2*pi/3)- _fmod(sph.y,(pi/3)))/sqrtf(3);
+    const float huemag =((_acosf(_cosf(3*sph.y+pi)))/(pi*huecoef1)+(((_asinf(1/_sqrtf(2))/_asinf(1/_sqrtf(3))))-1))*huecoef2;
+    const float satmagsp = _sinf(huemag+_asinf(1/_sqrtf(3)));
+    sph.x *= 1/satmagsp;
+
+    const float ctr = sph.x * _sinf(sph.z) * _cosf(sph.y);
+    const float ctg = sph.x * _sinf(sph.z) * _sinf(sph.y);
+    const float ctb = sph.x * _cosf(sph.z);
+
+    return make_float3(
+        ctr * 0.81649658f + ctg * 0.0f + ctb * 0.57735027f,
+        ctr * -0.40824829f + ctg * 0.70710678f + ctb * 0.57735027f,
+        ctr * -0.40824829f + ctg * -0.70710678f + ctb * 0.57735027f
+    );
+}
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B) {
+    float3 rgb = make_float3(p_R, p_G, p_B);
+
+
+
+    switch (DIRECTION) {
+        case Forward:
+            rgb = rgb_to_spherical(rgb);
+            break;
+        case Inverse:
+            rgb = spherical_to_rgb(rgb);
+            break;
+    }
+
+    return rgb;
+}
