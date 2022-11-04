@@ -1,10 +1,13 @@
-//Modified by Juan Pablo Zambrano
+//DCTL by Juan Pablo Zambrano
+//Base transformation to Chen/Spherical coordinates from Quinn Leiho
+//Modifications to convert into 'Cone Coordinates' inspired by Steve Yedlin and Matthias Stoopman
+//Thanks for the help to Jan Karow, Kaur Hendrikson, Nico Wieseneder,and Keidrych Wasley
 
 
-DEFINE_UI_PARAMS(DIRECTION, Direction, DCTLUI_COMBO_BOX, 0, {Forward, Inverse}, {RGB to Spherical, Spherical to RGB})
+DEFINE_UI_PARAMS(DIRECTION, Direction, DCTLUI_COMBO_BOX, 0, {Forward, Inverse}, {RGB to Cone, Cone to RGB})
 
 
-__DEVICE__ float3 rgb_to_spherical(float3 rgb) {
+__DEVICE__ float3 rgb_to_cone(float3 rgb) {
     const float pi= 3.14159265359;
     const float rtr = rgb.x * 0.81649658f + rgb.y * -0.40824829f + rgb.z * -0.40824829f;
     const float rtg = rgb.x * 0.0f + rgb.y * 0.70710678f + rgb.z * -0.70710678f;
@@ -16,9 +19,9 @@ __DEVICE__ float3 rgb_to_spherical(float3 rgb) {
     const float spht = art < 0.0f ? art + 2.0f * 3.141592653589f : art;
     const float sphp = _atan2f(_sqrtf(rtr*rtr + rtg*rtg), rtb);
 
-
+//This is to modify the lum component which is the main reason why the saturation component has a different behavior 
     const float huecoef1= 1/(2-(_asinf(1/_sqrtf(2))/_asinf(1/_sqrtf(3))));
-    const float huecoef2 = 2*sphp*_sinf((2*pi/3)-_fmod(spht,(pi/3)))/sqrtf(3);
+    const float huecoef2 = 2*sphp*_sinf((2*pi/3)-_fmod(spht,(pi/3)))/_sqrtf(3);
     const float huemag =((_acosf(_cosf(3*spht+pi)))/(pi*huecoef1)+(((_asinf(1/_sqrtf(2))/_asinf(1/_sqrtf(3))))-1))*huecoef2;
     const float satmag = _sinf(huemag+_asinf(1/_sqrtf(3)));
 
@@ -31,15 +34,13 @@ __DEVICE__ float3 rgb_to_spherical(float3 rgb) {
     );
 }
 
-__DEVICE__ float3 spherical_to_rgb(float3 sph) {
+__DEVICE__ float3 cone_to_rgb(float3 sph) {
+    
     const float pi= 3.14159265359;
-   
-
-
     sph.y *= 6.283185307179586f;
     sph.z *= 0.9553166181245093f;
-const float huecoef1= 1/(2-(_asinf(1/_sqrtf(2))/_asinf(1/_sqrtf(3))));
-    const float huecoef2 = 2*sph.z*_sinf((2*pi/3)- _fmod(sph.y,(pi/3)))/sqrtf(3);
+    const float huecoef1= 1/(2-(_asinf(1/_sqrtf(2))/_asinf(1/_sqrtf(3))));
+    const float huecoef2 = 2*sph.z*_sinf((2*pi/3)- _fmod(sph.y,(pi/3)))/_sqrtf(3);
     const float huemag =((_acosf(_cosf(3*sph.y+pi)))/(pi*huecoef1)+(((_asinf(1/_sqrtf(2))/_asinf(1/_sqrtf(3))))-1))*huecoef2;
     const float satmagsp = _sinf(huemag+_asinf(1/_sqrtf(3)));
     sph.x *= 1/satmagsp;
@@ -62,10 +63,10 @@ __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p
 
     switch (DIRECTION) {
         case Forward:
-            rgb = rgb_to_spherical(rgb);
+            rgb = rgb_to_cone(rgb);
             break;
         case Inverse:
-            rgb = spherical_to_rgb(rgb);
+            rgb = cone_to_rgb(rgb);
             break;
     }
 
