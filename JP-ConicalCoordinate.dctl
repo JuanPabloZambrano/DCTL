@@ -8,7 +8,7 @@ DEFINE_UI_PARAMS(DIRECTION, Direction, DCTLUI_COMBO_BOX, 0, {Forward, Inverse}, 
 
 
 __DEVICE__ float3 rgb_to_cone(float3 rgb) {
-    const float pi= 3.14159265359;
+    const float pi= 3.14159265359f;
     const float rtr = rgb.x * 0.81649658f + rgb.y * -0.40824829f + rgb.z * -0.40824829f;
     const float rtg = rgb.x * 0.0f + rgb.y * 0.70710678f + rgb.z * -0.70710678f;
     const float rtb = rgb.x * 0.57735027f + rgb.y * 0.57735027f + rgb.z * 0.57735027f;
@@ -20,10 +20,10 @@ __DEVICE__ float3 rgb_to_cone(float3 rgb) {
     const float sphp = _atan2f(_sqrtf(rtr*rtr + rtg*rtg), rtb);
 
 //This is to modify the lum component which is the main reason why the saturation component has a different behavior 
-    const float huecoef1= 1/(2-(_asinf(1/_sqrtf(2))/_asinf(1/_sqrtf(3))));
-    const float huecoef2 = 2*sphp*_sinf((2*pi/3)-_fmod(spht,(pi/3)))/_sqrtf(3);
-    const float huemag =((_acosf(_cosf(3*spht+pi)))/(pi*huecoef1)+(((_asinf(1/_sqrtf(2))/_asinf(1/_sqrtf(3))))-1))*huecoef2;
-    const float satmag = _sinf(huemag+_asinf(1/_sqrtf(3)));
+    const float huecoef1= 1.0f/(2.0f-(0.78539816f/0.61547971f));
+    const float huecoef2 = 2.0f*sphp*_sinf((2.0f*pi/3.0f)-_fmod(spht,(pi/3.0f)))/1.7320508075688f;
+    const float huemag =((_acosf(_cosf(3.0f*spht+pi)))/(pi*huecoef1)+(((0.78539816f/0.61547971f))-1.0f))*huecoef2;
+    const float satmag = _sinf(huemag+0.61547971f);
 
 
 
@@ -36,14 +36,14 @@ __DEVICE__ float3 rgb_to_cone(float3 rgb) {
 
 __DEVICE__ float3 cone_to_rgb(float3 sph) {
     
-    const float pi= 3.14159265359;
+    const float pi= 3.14159265359f;
     sph.y *= 6.283185307179586f;
     sph.z *= 0.9553166181245093f;
-    const float huecoef1= 1/(2-(_asinf(1/_sqrtf(2))/_asinf(1/_sqrtf(3))));
-    const float huecoef2 = 2*sph.z*_sinf((2*pi/3)- _fmod(sph.y,(pi/3)))/_sqrtf(3);
-    const float huemag =((_acosf(_cosf(3*sph.y+pi)))/(pi*huecoef1)+(((_asinf(1/_sqrtf(2))/_asinf(1/_sqrtf(3))))-1))*huecoef2;
-    const float satmagsp = _sinf(huemag+_asinf(1/_sqrtf(3)));
-    sph.x *= 1/satmagsp;
+    const float huecoef1= 1.0f/(2.0f-(0.78539816f/0.61547971f));
+    const float huecoef2 = 2.0f*sph.z*_sinf((2.0f*pi/3.0f)- _fmod(sph.y,(pi/3.0f)))/1.7320508075688f;
+    const float huemag =((_acosf(_cosf(3.0f*sph.y+pi)))/(pi*huecoef1)+(((0.78539816f/0.61547971f))-1.0f))*huecoef2;
+    const float satmagsp = _sinf(huemag+0.61547971f);
+    sph.x *= 1.0f/satmagsp;
 
     const float ctr = sph.x * _sinf(sph.z) * _cosf(sph.y);
     const float ctg = sph.x * _sinf(sph.z) * _sinf(sph.y);
