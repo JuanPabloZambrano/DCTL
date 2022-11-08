@@ -62,15 +62,26 @@ if ((g >= m_pos) && (g <= r_pos2)){
 	hue = (_cosf(((rgb.y-m_pos)/(r_pos2-m_pos))*pi)-1.0f)*0.5f*(m_sat-r_sat)+m_sat;
 }
 
-if((g > r_pos2) || (g< r_pos)){
- 
+if(g < r_pos){
 	hue=r_sat;
+}
+ 
+if(g>r_pos2){
+ hue=r_sat;
+
+}
+
+	g=g+(hue-1.0f)/6.0f;
+
+if(g<0){
+	g=g+1.0f;
+}
+if(g>1){
+	g=g-1.0f;
 }
 
 
 
-
-	g=g+(hue-1.0f)/6.0f;
 	//g=g+hue;
 return make_float3(r,g,b);
 
