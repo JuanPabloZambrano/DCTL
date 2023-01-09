@@ -1,0 +1,194 @@
+//Based on Troy Sobotka's work
+//Low Contrast has a 0.5 output middle grey
+//High Contrast has a 0.396121 output middle grey
+//Agx log is a pure log2 trasfer function with 10 stops under 0.18 and 6.5 stops over middle grey
+//The Image is formed in Rec2020 and then you can convert to P3d65 or rec709
+
+
+
+DEFINE_UI_PARAMS(in_gamut, input gamut, DCTLUI_COMBO_BOX, 10, {ap0, ap1, p3d65,p3d60, rec2020, rec709, awg3, awg4,rwg, sgamut3,sgamut3cine, blackmagicwg, canoncinema, davinciwg,egamut}, {ACES, ACEScg, P3D65,P3D60, Rec.2020, Rec.709, Alexa Wide Gamut 3,Alexa Wide Gamut 4, Red Wide Gamut RGB, Sony SGamut3,Sony SGamut3Cine, Blackmagic Wide Gamut, Canon Cinema - Gamut, DaVinci Wide Gamut,Filmlight E - Gamut})
+DEFINE_UI_PARAMS(in_curve, input curve, DCTLUI_COMBO_BOX, 5, {linear, acescct, arri_logc,arri_logc4, red_log3g10, sony_slog3, blackmagic_film_gen5, canonlog3, davinci_intermediate,filmlight_tlog}, {Linear, ACEScct, Arri V3LogC,Arri LogCV4, Red Log3G10, Sony SLog3, Blackmagic Film Gen5, Canon Log3, DaVinci Intermediate,Filmlight TLog})
+DEFINE_UI_PARAMS(Output, Output, DCTLUI_COMBO_BOX, 1, {BaseRec2020, Bt1886,BaseP3d65,AgxLog}, {BaseRec2020, BT1886,BaseP3d65,AgxLog})
+DEFINE_UI_PARAMS(Contrast, Contrast, DCTLUI_COMBO_BOX, 0, {Low, High}, {Low, High})
+DEFINE_UI_PARAMS(Flourish, Flourish , DCTLUI_CHECK_BOX, 1)
+DEFINE_UI_PARAMS(Loginput, AGXlog Input, DCTLUI_CHECK_BOX, 0)
+DEFINE_UI_PARAMS(Blackandwhite, Blackandwhite, DCTLUI_CHECK_BOX, 0)
+
+#include "libDRT2.h"
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B)
+{
+  float3x3 in_to_xyz;
+  if (in_gamut == ap0)                in_to_xyz = matrix_ap0_to_xyz;
+  else if (in_gamut == ap1)           in_to_xyz = matrix_ap1_to_xyz;
+  else if (in_gamut == p3d65)         in_to_xyz = matrix_p3d65_to_xyz;
+  else if (in_gamut == p3d60)         in_to_xyz = RGBtoXYZ(P3D60_PRI);
+  else if (in_gamut == rec2020)       in_to_xyz = matrix_rec2020_to_xyz;
+  else if (in_gamut == rec709)        in_to_xyz = matrix_rec709_to_xyz;
+  else if (in_gamut == awg3)          in_to_xyz = matrix_arriwg_to_xyz;
+  else if (in_gamut == rwg)           in_to_xyz = matrix_redwg_to_xyz;
+  else if (in_gamut == sgamut3)       in_to_xyz = matrix_sonysgamut3;
+  else if (in_gamut == blackmagicwg)  in_to_xyz = matrix_blackmagicwg_to_xyz;
+  else if (in_gamut == canoncinema)   in_to_xyz = matrix_canoncinema_to_xyz;
+  else if (in_gamut == davinciwg)     in_to_xyz = matrix_davinciwg_to_xyz;
+  else if (in_gamut == egamut)        in_to_xyz = matrix_egamut_to_xyz;
+  else if (in_gamut == awg4)         in_to_xyz = RGBtoXYZ(ARRI_ALEXA_WG4_PRI);
+  else if (in_gamut == sgamut3cine)  in_to_xyz = RGBtoXYZ(SGAMUT3cine_PRI);
+
+  const float3x3 xyz_to_in = inv_f33(in_to_xyz);
+
+  int tf;
+  if (in_curve == linear)                     tf = 0;
+  else if (in_curve == acescct)               tf = 1;
+  else if (in_curve == arri_logc)             tf = 2;
+  else if (in_curve == red_log3g10)           tf = 3;
+  else if (in_curve == sony_slog3)            tf = 4;
+  else if (in_curve == filmlight_tlog)        tf = 5;
+  else if (in_curve == davinci_intermediate)  tf = 6;
+  else if (in_curve == blackmagic_film_gen5)  tf = 7;
+  else if (in_curve == canonlog3)             tf = 8;
+  else if (in_curve == arri_logc4)            tf = 9;
+
+//Inset flourish comes from Agx by Eary Chow, and no flourish is just a 20% inset with no primary rotation
+Chromaticities rec2020_inset = Insetcalc(REC2020_PRI,0.2,0.2,0.2);
+float3x3 rec2020_insetmat;
+Chromaticities rec2020rot_inset = RotatePrimaries(rec2020_inset,-4.3,-3,7.1);
+if (Flourish == 1)
+    //rec2020_insetmat=make_float3x3(make_float3(0.743254069503573f, 0.209877192574151f, 0.0468687379222756f),make_float3(0.101341657793092f, 0.775415045243814f, 0.123243296963094f), make_float3(0.0236875520535265f, 0.0918897329892661f, 0.884422714957207f));
+    rec2020_insetmat = RGBtoRGB(REC2020_PRI,rec2020rot_inset);
+else if(Flourish == 0)
+    rec2020_insetmat = RGBtoRGB(REC2020_PRI,rec2020_inset);
+
+
+//Calculate Matrices
+
+  const float3x3 xyz_to_rec2020 = inv_f33(matrix_rec2020_to_xyz);
+  const float3x3 rec2020_to_xyz = matrix_rec2020_to_xyz;
+  const float3x3 xyz_to_rec709 = inv_f33(matrix_rec709_to_xyz);
+  const float3x3 xyz_to_p3d60 = inv_f33(matrix_p3d60_to_xyz);
+  const float3x3 xyz_to_p3d65 = inv_f33(matrix_p3d65_to_xyz);
+  float3x3 rec2020_outsetmat = inv_f33(rec2020_insetmat); 
+
+//Input 
+
+  float3 rgb = make_float3(p_R, p_G, p_B);
+  float3 agx = rgb;
+
+//LogInput to Linear rec2020
+  float3 bp = rgb;
+  bp.x = 0.0f;
+  bp.y = 0.0f;
+  bp.z = 0.0f;
+  bp = lin2log(bp,tf);
+  
+  rgb = maxf3(bp.x,rgb);
+
+   rgb = log2lin(rgb, tf);
+   //rgb = tf==0? log2lin(rgb, tf):(rgb<_lin2log(bp, tf))?maxf3(_log2lin(rgb, tf),_lin2log(bp, tf));
+   float3 xyz = mult_f3_f33(rgb, in_to_xyz);
+   rgb = mult_f3_f33(xyz, xyz_to_rec2020);
+
+   
+//Guardrail chroma to rec2020,reduces chroma until no negative values exist
+   rgb = Lowrail(rgb,REC2020_PRI_2012);
+   //rgb = RGB2HCL(REC2020_PRI_2012,rgb);
+   //rgb.y = tonescale3(rgb.y, 4.115, 1.54, 1.01 , 0.344, 0.14 , 0.5 , 0.5 , 0.95 , 1.0 , 0.0 ,0.0);
+   //rgb.z = _fabs(rgb.z);
+   //rgb = HCL2RGB(REC2020_PRI_2012,rgb);
+
+//Black and White option
+rgb = Blackandwhite == 1? desaturate(rgb,REC2020_PRI_2012,0.0):rgb;
+
+
+//apply inset matrix
+   rgb = mult_f3_f33(rgb,rec2020_insetmat);
+
+   rgb.x = LintoLog(rgb.x,-10,6.5);
+   rgb.y = LintoLog(rgb.y,-10,6.5);
+   rgb.z = LintoLog(rgb.z,-10,6.5);
+
+   float3 log = rgb;
+   //punchy
+   //float twotofour= 11/12;
+   //rgb =powf3(img,1.1865);
+
+if (Loginput == 1) 
+    rgb=agx;
+
+
+
+
+rgb = clampf3(rgb,0,1);
+//float3 agx2 = rgb;
+
+
+switch (Contrast) {
+        case High:
+            rgb.x = tonescale3(rgb.x, 1.84, 1.54, 2.86, 0.173,0.14,0.6060606060606, 0.396121,1.0,0.92830485,0.0,0.039898);
+            rgb.y = tonescale3(rgb.y, 1.84, 1.54, 2.86, 0.173,0.14,0.6060606060606, 0.396121,1.0,0.92830485,0.0,0.039898);
+            rgb.z = tonescale3(rgb.z, 1.84, 1.54, 2.86, 0.173,0.14,0.6060606060606, 0.396121,1.0,0.92830485,0.0,0.039898);
+
+
+            break;
+        case Low:
+            rgb.x = tonescale(rgb.x, 3, 3.25, 2, 0.6060606060606, 0.389999);
+            rgb.y = tonescale(rgb.y, 3, 3.25, 2, 0.6060606060606, 0.389999);
+            rgb.z = tonescale(rgb.z, 3, 3.25, 2, 0.6060606060606, 0.389999);
+
+            break;
+
+    }
+
+
+rgb = mult_f3_f33(rgb,rec2020_outsetmat);
+rgb = clampf3(rgb,0,1);
+
+    //linearize Rec2020 gamma 2.4 to XYZ
+  float3 img = rgb;
+  float gm   = 1/2.4;
+  img  = powf3(img,2.4);
+  //float3 pcalcs = RGB2HCL(REC2020_PRI_2012,img);
+  //float calcs = pcalcs.y;
+  img    = mult_f3_f33(img,matrix_rec2020_to_xyz);
+
+  float mx;
+switch (Output) {
+        case BaseRec2020:
+            img = rgb;
+            break;
+        case Bt1886:
+            img = img;
+            img = mult_f3_f33(img,xyz_to_rec709);
+            img = RGB2HCL(REC709_PRI,img);
+            img.y = tonescale3(img.y, 4.115, 1.54, 1.01 , 0.344, 0.14 , 0.5 , 0.5 , 0.95 , 1.0 , 0.0 ,0.0);
+            //img.y = calcs;
+            img = HCL2RGB(REC709_PRI,img);
+            mx = _fmaxf(img.z,_fmaxf(img.x,img.y));
+            img.x = img.x>1 ? img.x/mx:img.x;
+            img.y = img.y>1 ? img.y/mx:img.y;
+            img.z = img.z>1 ? img.z/mx:img.z;
+            img = powf3(img,gm);
+
+            break;
+        case AgxLog:
+            img=log;
+            break;
+        
+        case BaseP3d65:
+            img = mult_f3_f33(img,xyz_to_p3d65);            
+            img = RGB2HCL(P3D65_PRI,img);
+            img.y = tonescale3(img.y, 4.115, 1.54, 1.01 , 0.344, 0.14 , 0.5 , 0.5 , 0.95 , 1.0 , 0.0 ,0.0);
+            img = HCL2RGB(P3D65_PRI,img);
+            mx = _fmaxf(img.z,_fmaxf(img.x,img.y));
+            img.x = img.x>1 ? img.x/mx:img.x;
+            img.y = img.y>1 ? img.y/mx:img.y;
+            img.z = img.z>1 ? img.z/mx:img.z;
+            img = powf3(img,gm);
+            break;
+    }
+
+   return img;
+}
+
+
+
