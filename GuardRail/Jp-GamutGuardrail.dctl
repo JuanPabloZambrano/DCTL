@@ -1,0 +1,76 @@
+#include "Agxlib.h"
+
+DEFINE_UI_PARAMS(in_gamut, input gamut, DCTLUI_COMBO_BOX, 8, {ap0, ap1, p3d65,p3d60, rec2020, rec709, awg3, awg4,rwg, sgamut3,sgamut3cine, blackmagicwg, canoncinema, davinciwg,egamut}, {ACES, ACEScg, P3D65,P3D60, Rec.2020, Rec.709, Alexa Wide Gamut 3,Alexa Wide Gamut 4, Red Wide Gamut RGB, Sony SGamut3,Sony SGamut3Cine, Blackmagic Wide Gamut, Canon Cinema - Gamut, DaVinci Wide Gamut,Filmlight E - Gamut})
+DEFINE_UI_PARAMS(in_curve, input curve, DCTLUI_COMBO_BOX, 4, {linear, acescct, arri_logc,arri_logc4, red_log3g10, sony_slog3, blackmagic_film_gen5, canonlog3, davinci_intermediate,filmlight_tlog}, {Linear, ACEScct, Arri V3LogC,Arri LogCV4, Red Log3G10, Sony SLog3, Blackmagic Film Gen5, Canon Log3, DaVinci Intermediate,Filmlight TLog})
+DEFINE_UI_PARAMS(Limit, Limit gamut, DCTLUI_COMBO_BOX, 0, {rec_2020,rec_709}, {Rec.2020,Rec.709})
+
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B)
+{
+
+float3 rgb = make_float3(p_R, p_G, p_B);
+
+ 
+float3x3 in_to_xyz;
+  if (in_gamut == ap0)                in_to_xyz = matrix_ap0_to_xyz;
+  else if (in_gamut == ap1)           in_to_xyz = matrix_ap1_to_xyz;
+  else if (in_gamut == p3d65)         in_to_xyz = matrix_p3d65_to_xyz;
+  else if (in_gamut == p3d60)         in_to_xyz = RGBtoXYZ(P3D60_PRI);
+  else if (in_gamut == rec2020)       in_to_xyz = matrix_rec2020_to_xyz;
+  else if (in_gamut == rec709)        in_to_xyz = matrix_rec709_to_xyz;
+  else if (in_gamut == awg3)          in_to_xyz = matrix_arriwg_to_xyz;
+  else if (in_gamut == rwg)           in_to_xyz = matrix_redwg_to_xyz;
+  else if (in_gamut == sgamut3)       in_to_xyz = matrix_sonysgamut3;
+  else if (in_gamut == blackmagicwg)  in_to_xyz = matrix_blackmagicwg_to_xyz;
+  else if (in_gamut == canoncinema)   in_to_xyz = matrix_canoncinema_to_xyz;
+  else if (in_gamut == davinciwg)     in_to_xyz = matrix_davinciwg_to_xyz;
+  else if (in_gamut == egamut)        in_to_xyz = matrix_egamut_to_xyz;
+  else if (in_gamut == awg4)         in_to_xyz = RGBtoXYZ(ARRI_ALEXA_WG4_PRI);
+  else if (in_gamut == sgamut3cine)  in_to_xyz = RGBtoXYZ(SGAMUT3cine_PRI);
+
+  const float3x3 xyz_to_in = inv_f33(in_to_xyz);
+
+  int tf;
+  if (in_curve == linear)                     tf = 0;
+  else if (in_curve == acescct)               tf = 1;
+  else if (in_curve == arri_logc)             tf = 2;
+  else if (in_curve == red_log3g10)           tf = 3;
+  else if (in_curve == sony_slog3)            tf = 4;
+  else if (in_curve == filmlight_tlog)        tf = 5;
+  else if (in_curve == davinci_intermediate)  tf = 6;
+  else if (in_curve == blackmagic_film_gen5)  tf = 7;
+  else if (in_curve == canonlog3)             tf = 8;
+  else if (in_curve == arri_logc4)            tf = 9;
+
+float3x3 xyz_to_rec709 = inv_f33(matrix_rec709_to_xyz);
+float3x3 xyz_to_rec2020 = inv_f33(matrix_rec2020_to_xyz);
+
+ rgb = log2lin(rgb, tf);
+ float3 xyz = mult_f3_f33(rgb, in_to_xyz);
+
+if(Limit == rec_2020)  rgb = mult_f3_f33(xyz, xyz_to_rec2020);
+else if (Limit == rec_709) rgb = mult_f3_f33(xyz, xyz_to_rec709);
+
+
+Chromaticities Limiter;
+if(Limit == rec_2020)  Limiter = REC2020_PRI;
+else if (Limit == rec_709) Limiter = REC709_PRI;
+
+rgb = Gamutlimiter(rgb,Limiter,7,0.5,2.23);
+
+if(Limit == rec_2020)  rgb = mult_f3_f33(rgb, matrix_rec2020_to_xyz);
+else if (Limit == rec_709) rgb = mult_f3_f33(rgb, matrix_rec709_to_xyz);
+
+
+rgb = mult_f3_f33(rgb,xyz_to_in);
+rgb = lin2log(rgb, tf);
+
+
+
+
+
+return rgb;
+
+}
+
+
