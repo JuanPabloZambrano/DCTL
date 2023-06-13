@@ -1,0 +1,286 @@
+#line 2
+
+#define PI 3.1415926535897932384626
+__CONSTANT__ float HALF_MAXIMUM = 65504.0f;
+
+__DEVICE__ float3 mv_33_3(float mat[3][3], float3 v) {
+    float3 out = make_float3(mat[0][0] * v.x + mat[0][1] * v.y + mat[0][2] * v.z,
+                             mat[1][0] * v.x + mat[1][1] * v.y + mat[1][2] * v.z,
+                             mat[2][0] * v.x + mat[2][1] * v.y + mat[2][2] * v.z);
+    return out;
+}
+
+
+
+__DEVICE__ float normalize_gain(float3 in) {
+
+  float3 out;
+  
+  float chroma = in.y;
+  float angle = (in.x)*2*PI;
+  angle = angle - PI/6;
+
+  chroma = chroma*_atan2f(_sqrtf(2.0f),1.0f);
+  out.y = _tanf(chroma)/_sqrtf(2.0f);
+  float chroma_gain = 1/(2*_cosf((_acosf(_sinf(3*(angle))))/3));
+
+
+    return chroma_gain;
+
+}
+
+
+__DEVICE__ float3 rgb_to_spherical(float3 x) {
+    
+    float3 in = x;
+    float norm = _fmaxf(in.x,_fmaxf(in.y,in.z));
+    float rot_mat[3][3] = {{_sqrtf(6.0f)/3.0f, -_sqrtf(6.0f)/6.0f, -_sqrtf(6.0f)/6.0f}, {0.0, _sqrtf(2.0f)/2.0f,-_sqrtf(2.0f)/2.0f}, {_sqrtf(3.0f)/3.0f, _sqrtf(3.0f)/3.0f, _sqrtf(3.0f)/3.0f}};
+
+    float3 rotated_color = mv_33_3(rot_mat, x);
+    float theta = _atan2f(rotated_color.y, rotated_color.x) / (2.0 * PI);
+
+    
+    float3 spherical = make_float3(0.0, 0.0, 0.0);
+  
+  spherical.x = theta < 0.0 ? theta + 1.0 : theta;
+  spherical.y = _sqrtf((rotated_color.x)*(rotated_color.x) + (rotated_color.y)*(rotated_color.y));
+  spherical.y = _atan2f(spherical.y,rotated_color.z)/_atan2f(_sqrtf(2.0f),1.0f);
+  spherical.z = norm;
+
+    
+    return spherical;
+}
+
+
+
+
+__DEVICE__ float3 spherical_to_cone(float3 in) {
+
+  float3 out = in;
+  
+  float chroma = in.y;
+  float angle = (in.x)*2*PI;
+  angle = angle - PI/6;
+
+  chroma = chroma*_atan2f(_sqrtf(2.0f),1.0f);
+  out.y = _tanf(chroma)/_sqrtf(2.0f);
+  float chroma_gain = normalize_gain(in);
+
+  out.y = out.y/chroma_gain;
+
+
+    return out;
+}
+
+
+
+__DEVICE__ float3 cone_to_rgb(float3 in) {
+
+  float3 copy = in;
+  copy.x = copy.x + 0.5f;
+
+  float chroma_gain1 = normalize_gain(in);
+  float chroma_gain2 = normalize_gain(copy);
+
+  float norm_gain = (chroma_gain2+chroma_gain1*in.y)/chroma_gain2;
+
+  in.z = in.z/norm_gain;
+  in.y = in.y*chroma_gain1;
+
+  float3 out = in;
+
+  out.x = _cosf(in.x*2*PI)*in.y*in.z*_sqrtf(3)/(_sqrtf(2)/2);
+  out.y = _sinf(in.x*2*PI)*in.y*in.z*_sqrtf(3)/(_sqrtf(2)/2);
+  out.z = in.z*_sqrtf(3);
+
+  float rot_mat[3][3] = {{_sqrtf(6.0f)/3.0f, 0.0, _sqrtf(3.0f)/3.0f}, {-_sqrtf(6.0f)/6.0f, _sqrtf(2.0f)/2.0f,_sqrtf(3.0f)/3.0f}, {-_sqrtf(6.0f)/6.0f, -_sqrtf(2.0f)/2.0f, _sqrtf(3.0f)/3.0f}};
+
+    out = mv_33_3(rot_mat, out);
+
+
+    return out;
+}
+
+
+
+
+__DEVICE__ float rolloff_function(float x, float a, float b) {
+
+        return a * (x / (x + b));
+}
+
+__DEVICE__ float P_compress(float x, float l, float t1,float p) {
+
+        float s = (l-t1)/_powf(_powf(((1-t1)/(l-t1)),-p)-1,1/p);
+        float f1 = ((x-t1)/s)/_powf((1+ _powf(((x-t1)/s),p)),1/p);
+
+        return x>t1?f1*s+t1:x;
+}
+
+//DEFINE_UI_PARAMS(max_input_nits, Max Input Nits, DCTLUI_SLIDER_FLOAT, 10000.0, 48.0, 10000.0, 1.0)
+//DEFINE_UI_PARAMS(max_output_nits, Max Output Nits, DCTLUI_SLIDER_FLOAT, 100.0, 48.0, 10000.0, 1.0)
+//DEFINE_UI_PARAMS(adaptation, Adaptation, DCTLUI_SLIDER_FLOAT, 9.0, 9.0, 9.0, 1.0)
+DEFINE_UI_PARAMS(rc, R Compress, DCTLUI_SLIDER_FLOAT, 0.15, 0, 1, 0.01)
+DEFINE_UI_PARAMS(gc, G Compress, DCTLUI_SLIDER_FLOAT, 0.1, 0, 1, 0.01)
+DEFINE_UI_PARAMS(bc,B Compress, DCTLUI_SLIDER_FLOAT, 0.1, 0, 1, 0.01)
+DEFINE_UI_PARAMS(ored, Rotate R, DCTLUI_SLIDER_FLOAT, 4.5, -10.0, 10, 1)
+DEFINE_UI_PARAMS(og, Rotate G, DCTLUI_SLIDER_FLOAT, -0.5, -10.0, 10, 1)
+DEFINE_UI_PARAMS(ob, Rotate B, DCTLUI_SLIDER_FLOAT, -2.0, -10.0, 10, 1)
+DEFINE_UI_PARAMS(in_gamut, input gamut, DCTLUI_COMBO_BOX, 5, {ap0, ap1, p3d65,p3d60, rec2020, rec709, awg3, awg4,rwg, sgamut3,sgamut3cine, blackmagicwg, canoncinema, davinciwg,egamut}, {ACES, ACEScg, P3D65,P3D60, Rec.2020, Rec.709, Alexa Wide Gamut 3,Alexa Wide Gamut 4, Red Wide Gamut RGB, Sony SGamut3,Sony SGamut3Cine, Blackmagic Wide Gamut, Canon Cinema - Gamut, DaVinci Wide Gamut,Filmlight E - Gamut})
+DEFINE_UI_PARAMS(in_curve, input curve, DCTLUI_COMBO_BOX, 0, {linear, acescct, arri_logc,arri_logc4, red_log3g10, sony_slog3, blackmagic_film_gen5, canonlog3, davinci_intermediate,filmlight_tlog}, {Linear, ACEScct, Arri V3LogC,Arri LogCV4, Red Log3G10, Sony SLog3, Blackmagic Film Gen5, Canon Log3, DaVinci Intermediate,Filmlight TLog})
+DEFINE_UI_PARAMS(Loginput, AGXlog Input, DCTLUI_CHECK_BOX, 0)
+DEFINE_UI_PARAMS(Output, Output, DCTLUI_COMBO_BOX, 1, {BaseRec709,HighContrast,AgxLog}, {BaseRec709, HighContrast,AgxLog})
+
+
+#include "JpDRT.h"
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B)
+{
+  float3x3 in_to_xyz;
+  if (in_gamut == ap0)                in_to_xyz = matrix_ap0_to_xyz;
+  else if (in_gamut == ap1)           in_to_xyz = matrix_ap1_to_xyz;
+  else if (in_gamut == p3d65)         in_to_xyz = matrix_p3d65_to_xyz;
+  else if (in_gamut == p3d60)         in_to_xyz = RGBtoXYZ(P3D60_PRI);
+  else if (in_gamut == rec2020)       in_to_xyz = matrix_rec2020_to_xyz;
+  else if (in_gamut == rec709)        in_to_xyz = matrix_rec709_to_xyz;
+  else if (in_gamut == awg3)          in_to_xyz = matrix_arriwg_to_xyz;
+  else if (in_gamut == rwg)           in_to_xyz = matrix_redwg_to_xyz;
+  else if (in_gamut == sgamut3)       in_to_xyz = matrix_sonysgamut3;
+  else if (in_gamut == blackmagicwg)  in_to_xyz = matrix_blackmagicwg_to_xyz;
+  else if (in_gamut == canoncinema)   in_to_xyz = matrix_canoncinema_to_xyz;
+  else if (in_gamut == davinciwg)     in_to_xyz = matrix_davinciwg_to_xyz;
+  else if (in_gamut == egamut)        in_to_xyz = matrix_egamut_to_xyz;
+  else if (in_gamut == awg4)         in_to_xyz = RGBtoXYZ(ARRI_ALEXA_WG4_PRI);
+  else if (in_gamut == sgamut3cine)  in_to_xyz = RGBtoXYZ(SGAMUT3cine_PRI);
+
+  const float3x3 xyz_to_in = inv_f33(in_to_xyz);
+
+  int tf;
+  if (in_curve == linear)                     tf = 0;
+  else if (in_curve == acescct)               tf = 1;
+  else if (in_curve == arri_logc)             tf = 2;
+  else if (in_curve == red_log3g10)           tf = 3;
+  else if (in_curve == sony_slog3)            tf = 4;
+  else if (in_curve == filmlight_tlog)        tf = 5;
+  else if (in_curve == davinci_intermediate)  tf = 6;
+  else if (in_curve == blackmagic_film_gen5)  tf = 7;
+  else if (in_curve == canonlog3)             tf = 8;
+  else if (in_curve == arri_logc4)            tf = 9;
+
+//Constants for display transfer function
+  float max_input_nits = 10000;
+  float max_output_nits = 100;
+  float adaptation = 18;
+  float input_white = max_input_nits / 100.0;
+  float output_white = max_output_nits / 100.0;
+  float b = (input_white - (adaptation / 100.0) * (input_white / output_white)) / ((input_white / output_white) - 1);
+  float a = output_white / (input_white / (input_white + b));
+  float b1 = (input_white - (19 / 100.0) * (input_white / output_white)) / ((input_white / output_white) - 1);
+  float a1 = output_white / (input_white / (input_white + b1));
+  float n = 2.8f;
+  float g1 = 0.4f;
+  float m0 = 1.0f;
+  float m1 = 0.96f;
+  float g0 = _powf(0.19,1/2.4);
+  float p0 = _powf(g0,n);
+  float p1 = _powf(m0,n);
+  float s1 = m1*g1*(p0-p1)/(m1*p0-g1*p1);
+  float s0 = p0*(s1-g1)/g1;
+
+
+//Inset and outset matrix calculation  
+  Chromaticities rec709_inset = InsetPrimaries(REC709_PRI,rc,gc,bc,ored,og,ob);
+  float3x3 insetmat = RGBtoRGB(rec709_inset,REC709_PRI);
+  float3x3 outsetmat= inv_f33(insetmat);
+
+//Calculate Matrices
+  const float3x3 xyz_to_rec709 = inv_f33(matrix_rec709_to_xyz);
+
+//Input 
+  float3 rgb = make_float3(p_R, p_G, p_B);
+  float3 agx = rgb;
+//remove infinities and nan
+  rgb = minf3(HALF_MAXIMUM,rgb);
+  rgb = maxf3(-HALF_MAXIMUM,rgb);
+
+//Decode input and transform to tristimulus rec709 
+  rgb = log2lin(rgb, tf);
+  float3 xyz = mult_f3_f33(rgb, in_to_xyz);
+  rgb = mult_f3_f33(xyz, xyz_to_rec709);
+
+//Low guardrail, remove negative values
+  rgb = rgb_to_spherical(rgb);
+  rgb = spherical_to_cone(rgb);
+  rgb.y = _fminf(1.0f,rgb.y);
+  rgb.y = _fmaxf(0.0f,rgb.y);
+  rgb.z = _fmaxf(0.0f,rgb.z);
+  rgb = cone_to_rgb(rgb);
+
+//Apply inset, this makes sure all values dechroma the higher they are
+
+   rgb = mult_f3_f33(rgb,insetmat);
+   float3 lin = rgb;
+   
+   float3 log;
+
+
+//Output JpLogZ,this is just a log curve with where linear 0.0f gets mapped to Log 0.0f and linear 100.0f get mapped to 1.0f
+   log.x = lin2logz(rgb.x,-8.5,100);
+   log.y = lin2logz(rgb.y,-8.5,100);
+   log.z = lin2logz(rgb.z,-8.5,100);
+
+//if the input is LogZ 
+  if (Loginput == 1) 
+    rgb = make_float3(log2linz(agx.x,-8.5,100),log2linz(agx.y,-8.5,100),log2linz(agx.z,-8.5,100));
+
+//apply transfer function to display range
+float3 img;
+
+        img.x = rolloff_function(rgb.x, a, b);
+        img.y = rolloff_function(rgb.y, a, b);
+        img.z = rolloff_function(rgb.z, a, b);
+
+
+   switch (Output) {
+        case BaseRec709:
+
+            img = mult_f3_f33(img,outsetmat);
+            img = rgb_to_spherical(img);
+            img = spherical_to_cone(img);
+            img.z = _fminf(1.0f,img.z);
+            img = cone_to_rgb(img);
+            
+            //Approximation to a pure 2.4 transfer function with a slight linear section at the bottom for flaring
+            img.x = img.x<=0.004683?12.00796*img.x:1.097*_powf(img.x,1/2.725)-0.097;
+            img.y = img.y<=0.004683?12.00796*img.y:1.097*_powf(img.y,1/2.725)-0.097;
+            img.z = img.z<=0.004683?12.00796*img.z:1.097*_powf(img.z,1/2.725)-0.097;           
+
+            break;
+        case HighContrast:
+
+          //img = Loginput==1?rgb+0.01:rgb + 0.01f;
+          img = rgb +0.01f;
+          img.x = rolloff_function(img.x, a1, b1);
+          img.y = rolloff_function(img.y, a1, b1);
+          img.z = rolloff_function(img.z, a1, b1);
+          img.x = _powf(img.x,1/2.4);
+          img.y = _powf(img.y,1/2.4);
+          img.z = _powf(img.z,1/2.4);
+          img.x = s1*_powf(img.x,n)/(_powf(img.x,n)+s0);
+          img.y = s1*_powf(img.y,n)/(_powf(img.y,n)+s0);
+          img.z = s1*_powf(img.z,n)/(_powf(img.z,n)+s0);
+          break;
+
+
+        case AgxLog:
+            img=log;
+
+            break;
+    }
+
+
+  return img;
+}
+
+
+
