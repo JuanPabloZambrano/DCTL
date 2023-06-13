@@ -1,0 +1,74 @@
+//DCTL by Juan Pablo Zambrano
+//Base transformation to Chen/Spherical coordinates from Quinn Leiho
+//Modifications to convert into 'Cone Coordinates' inspired by Steve Yedlin and Matthias Stoopman
+//Thanks for the help to Jan Karow, Kaur Hendrikson, Nico Wieseneder,and Keidrych Wasley
+
+
+DEFINE_UI_PARAMS(DIRECTION, Direction, DCTLUI_COMBO_BOX, 0, {Forward, Inverse}, {RGB to Cone, Cone to RGB})
+
+
+__DEVICE__ float3 rgb_to_cone(float3 rgb) {
+    const float pi= 3.14159265359f;
+    const float rtr = rgb.x * 0.81649658f + rgb.y * -0.40824829f + rgb.z * -0.40824829f;
+    const float rtg = rgb.x * 0.0f + rgb.y * 0.70710678f + rgb.z * -0.70710678f;
+    const float rtb = rgb.x * 0.57735027f + rgb.y * 0.57735027f + rgb.z * 0.57735027f;
+
+    const float art = _atan2f(rtg, rtr);
+
+    const float sphr = _sqrtf(rtr*rtr + rtg*rtg + rtb*rtb);
+    const float spht = art < 0.0f ? art + 2.0f * 3.141592653589f : art;
+    const float sphp = _atan2f(_sqrtf(rtr*rtr + rtg*rtg), rtb);
+
+//This is to modify the lum component which is the main reason why the saturation component has a different behavior 
+    const float huecoef1= 1.0f/(2.0f-(0.78539816f/0.61547971f));
+    const float huecoef2 = 2.0f*sphp*_sinf((2.0f*pi/3.0f)-_fmod(spht,(pi/3.0f)))/1.7320508075688f;
+    const float huemag =((_acosf(_cosf(3.0f*spht+pi)))/(pi*huecoef1)+(((0.78539816f/0.61547971f))-1.0f))*huecoef2;
+    const float satmag = _sinf(huemag+0.61547971f);
+
+
+
+    return make_float3(
+        sphr*satmag,
+        spht * 0.15915494309189535f,
+        sphp * 1.0467733744265997f
+    );
+}
+
+__DEVICE__ float3 cone_to_rgb(float3 sph) {
+    
+    const float pi= 3.14159265359f;
+    sph.y *= 6.283185307179586f;
+    sph.z *= 0.9553166181245093f;
+    const float huecoef1= 1.0f/(2.0f-(0.78539816f/0.61547971f));
+    const float huecoef2 = 2.0f*sph.z*_sinf((2.0f*pi/3.0f)- _fmod(sph.y,(pi/3.0f)))/1.7320508075688f;
+    const float huemag =((_acosf(_cosf(3.0f*sph.y+pi)))/(pi*huecoef1)+(((0.78539816f/0.61547971f))-1.0f))*huecoef2;
+    const float satmagsp = _sinf(huemag+0.61547971f);
+    sph.x *= 1.0f/satmagsp;
+
+    const float ctr = sph.x * _sinf(sph.z) * _cosf(sph.y);
+    const float ctg = sph.x * _sinf(sph.z) * _sinf(sph.y);
+    const float ctb = sph.x * _cosf(sph.z);
+
+    return make_float3(
+        ctr * 0.81649658f + ctg * 0.0f + ctb * 0.57735027f,
+        ctr * -0.40824829f + ctg * 0.70710678f + ctb * 0.57735027f,
+        ctr * -0.40824829f + ctg * -0.70710678f + ctb * 0.57735027f
+    );
+}
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B) {
+    float3 rgb = make_float3(p_R, p_G, p_B);
+
+
+
+    switch (DIRECTION) {
+        case Forward:
+            rgb = rgb_to_cone(rgb);
+            break;
+        case Inverse:
+            rgb = cone_to_rgb(rgb);
+            break;
+    }
+
+    return rgb;
+}
