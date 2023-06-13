@@ -126,10 +126,10 @@ DEFINE_UI_PARAMS(bc,B Compress, DCTLUI_SLIDER_FLOAT, 0.1, 0, 1, 0.01)
 DEFINE_UI_PARAMS(ored, Rotate R, DCTLUI_SLIDER_FLOAT, 4.5, -10.0, 10, 1)
 DEFINE_UI_PARAMS(og, Rotate G, DCTLUI_SLIDER_FLOAT, -0.5, -10.0, 10, 1)
 DEFINE_UI_PARAMS(ob, Rotate B, DCTLUI_SLIDER_FLOAT, -2.0, -10.0, 10, 1)
-DEFINE_UI_PARAMS(in_gamut, input gamut, DCTLUI_COMBO_BOX, 5, {ap0, ap1, p3d65,p3d60, rec2020, rec709, awg3, awg4,rwg, sgamut3,sgamut3cine, blackmagicwg, canoncinema, davinciwg,egamut}, {ACES, ACEScg, P3D65,P3D60, Rec.2020, Rec.709, Alexa Wide Gamut 3,Alexa Wide Gamut 4, Red Wide Gamut RGB, Sony SGamut3,Sony SGamut3Cine, Blackmagic Wide Gamut, Canon Cinema - Gamut, DaVinci Wide Gamut,Filmlight E - Gamut})
-DEFINE_UI_PARAMS(in_curve, input curve, DCTLUI_COMBO_BOX, 0, {linear, acescct, arri_logc,arri_logc4, red_log3g10, sony_slog3, blackmagic_film_gen5, canonlog3, davinci_intermediate,filmlight_tlog}, {Linear, ACEScct, Arri V3LogC,Arri LogCV4, Red Log3G10, Sony SLog3, Blackmagic Film Gen5, Canon Log3, DaVinci Intermediate,Filmlight TLog})
-DEFINE_UI_PARAMS(Loginput, AGXlog Input, DCTLUI_CHECK_BOX, 0)
-DEFINE_UI_PARAMS(Output, Output, DCTLUI_COMBO_BOX, 1, {BaseRec709,HighContrast,AgxLog}, {BaseRec709, HighContrast,AgxLog})
+DEFINE_UI_PARAMS(in_gamut, input gamut, DCTLUI_COMBO_BOX, 13, {ap0, ap1, p3d65,p3d60, rec2020, rec709, awg3, awg4,rwg, sgamut3,sgamut3cine, blackmagicwg, canoncinema, davinciwg,egamut}, {ACES, ACEScg, P3D65,P3D60, Rec.2020, Rec.709, Alexa Wide Gamut 3,Alexa Wide Gamut 4, Red Wide Gamut RGB, Sony SGamut3,Sony SGamut3Cine, Blackmagic Wide Gamut, Canon Cinema - Gamut, DaVinci Wide Gamut,Filmlight E - Gamut})
+DEFINE_UI_PARAMS(in_curve, input curve, DCTLUI_COMBO_BOX, 8, {linear, acescct, arri_logc,arri_logc4, red_log3g10, sony_slog3, blackmagic_film_gen5, canonlog3, davinci_intermediate,filmlight_tlog}, {Linear, ACEScct, Arri V3LogC,Arri LogCV4, Red Log3G10, Sony SLog3, Blackmagic Film Gen5, Canon Log3, DaVinci Intermediate,Filmlight TLog})
+DEFINE_UI_PARAMS(Loginput, LogZ Input, DCTLUI_CHECK_BOX, 0)
+DEFINE_UI_PARAMS(Output, Output, DCTLUI_COMBO_BOX, 1, {BaseRec709,HighContrast,LogZ}, {BaseRec709, HighContrast,LogZ})
 
 
 #include "JpDRT.h"
@@ -272,7 +272,7 @@ float3 img;
           break;
 
 
-        case AgxLog:
+        case LogZ:
             img=log;
 
             break;
