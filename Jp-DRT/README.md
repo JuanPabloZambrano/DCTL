@@ -53,3 +53,8 @@ Log-like transfer for the working space.
 
 ## Output Primaries
 Output primaries encoding.
+
+## Look Transforms
+The n6HueFlight is made to work better on linear , if used in between the two instances of the DRT, select the LogZ input, this way it will be transformed correctly.
+
+The n6Chroma in the other hand tends to produce better results when applied in a log state, but it can still work in linear.
