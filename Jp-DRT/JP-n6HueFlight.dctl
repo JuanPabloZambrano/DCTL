@@ -207,7 +207,8 @@ DEFINE_UI_PARAMS(mb, blue, DCTLUI_SLIDER_FLOAT, 0, -1, 1, 0)
 DEFINE_UI_PARAMS(mc, cyan, DCTLUI_SLIDER_FLOAT, 0, -1, 1, 0)
 DEFINE_UI_PARAMS(mg, green, DCTLUI_SLIDER_FLOAT, 0, -1, 1, 0)
 DEFINE_UI_PARAMS(str, strength, DCTLUI_SLIDER_FLOAT, 0.5, 0, 1, 0)
-DEFINE_UI_PARAMS(Loginput, AGXlog Input, DCTLUI_CHECK_BOX, 0)
+DEFINE_UI_PARAMS(Loginput, LogZ Input, DCTLUI_CHECK_BOX, 1)
+
 
 __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B) {
     float3 curr_color = make_float3(p_R, p_G, p_B);
