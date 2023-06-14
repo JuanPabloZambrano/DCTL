@@ -169,13 +169,13 @@ __DEVICE__ float cubic_chroma(float x, float m, float s) {
 	else 
 		return x < 0.0f ? c0*x : x > 1.0f ? x : x*(_powf(x, p)*(a0*x + b0) + c0);
 }
-DEFINE_UI_PARAMS(ovr, overall, DCTLUI_SLIDER_FLOAT, 0, -0.2, 1, 0)
-DEFINE_UI_PARAMS(my, yellow, DCTLUI_SLIDER_FLOAT, 0, -0.2, 1, 0)
-DEFINE_UI_PARAMS(mr, red, DCTLUI_SLIDER_FLOAT, 0, -0.20, 1, 0)
-DEFINE_UI_PARAMS(mm, magenta, DCTLUI_SLIDER_FLOAT, 0, -0.2, 1, 0)
-DEFINE_UI_PARAMS(mb, blue, DCTLUI_SLIDER_FLOAT, 0, -0.2, 1, 0)
-DEFINE_UI_PARAMS(mc, cyan, DCTLUI_SLIDER_FLOAT, 0, -0.2, 1, 0)
-DEFINE_UI_PARAMS(mg, green, DCTLUI_SLIDER_FLOAT, 0, -0.2, 1, 0)
+DEFINE_UI_PARAMS(ovr, overall, DCTLUI_SLIDER_FLOAT, 0, -1, 1, 0)
+DEFINE_UI_PARAMS(my, yellow, DCTLUI_SLIDER_FLOAT, 0, -1, 1, 0)
+DEFINE_UI_PARAMS(mr, red, DCTLUI_SLIDER_FLOAT, 0, -1, 1, 0)
+DEFINE_UI_PARAMS(mm, magenta, DCTLUI_SLIDER_FLOAT, 0, -1, 1, 0)
+DEFINE_UI_PARAMS(mb, blue, DCTLUI_SLIDER_FLOAT, 0, -1, 1, 0)
+DEFINE_UI_PARAMS(mc, cyan, DCTLUI_SLIDER_FLOAT, 0, -1, 1, 0)
+DEFINE_UI_PARAMS(mg, green, DCTLUI_SLIDER_FLOAT, 0, -1, 1, 0)
 DEFINE_UI_PARAMS(str, strength, DCTLUI_SLIDER_FLOAT, 0.5, 0, 1, 0)
 
 __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B) {
@@ -200,15 +200,15 @@ __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p
 	float hy = power_window(_fmod(h + 0.0f, 6.0f), 1.0f, 2.67f, 2.67f, 0.0f, 2.0f);
 
   const float3 mp = make_float3(
-    _powf(2.0f, -mr*4),
-    _powf(2.0f, -mg*4),
-    _powf(2.0f, -mb*4));
+    _powf(2.0f, -_fmaxf(mr,-0.48)*2),
+    _powf(2.0f, -_fmaxf(mg,-0.48)*2),
+    _powf(2.0f, -_fmaxf(mb,-0.48)*2));
 
 
    const float3 ms = make_float3(
-    _powf(2.0f, -mc*4),
-    _powf(2.0f, -mm*4),
-    _powf(2.0f, -my*4));
+    _powf(2.0f, -_fmaxf(mc,-0.48)*2),
+    _powf(2.0f, -_fmaxf(mm,-0.48)*2),
+    _powf(2.0f, -_fmaxf(my,-0.48)*2));
 
    float mo = _powf(2.0f, -ovr);
 
