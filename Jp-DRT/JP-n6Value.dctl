@@ -159,6 +159,47 @@ __DEVICE__ float sdiv(float x, float c) {
 }
 
 
+__DEVICE__ float log2lin(float in,float mn,float mx) {
+   	
+   	float a = _powf(2,mn);
+   	float m2 = _log2f(mx/a+1)+mn;
+
+   	float out = in<0?in/(1/(_logf(2)*(m2-mn)*a)):_powf(2,in*(m2-mn)+mn)-a;
+   	
+    return out;
+}
+
+__DEVICE__ float lin2log(float in,float mn,float mx) {
+   	
+   	float a = _powf(2,mn);
+   	float m2 = _log2f(mx/a+1)+mn;
+
+   	float out = in<0?in/(_logf(2)*(m2-mn)*a):(_log2f(in+a)-mn)/(m2-mn);
+   	
+    return out;
+}
+
+__DEVICE__ float3 log2lin3(float3 in,float mn,float mx) {
+   		
+   		float3 out;
+   	out.x = log2lin(in.x,mn,mx);
+   	out.y = log2lin(in.y,mn,mx);
+   	out.z = log2lin(in.z,mn,mx);
+   	
+    return out;
+}
+
+__DEVICE__ float3 lin2log3(float3 in,float mn,float mx) {
+   	float3 out;
+   	out.x = lin2log(in.x,mn,mx);
+   	out.y = lin2log(in.y,mn,mx);
+   	out.z = lin2log(in.z,mn,mx);
+   	
+    return out;
+}
+
+
+
 DEFINE_UI_PARAMS(my, yellow, DCTLUI_SLIDER_FLOAT, 0, -1, 1, 0)
 DEFINE_UI_PARAMS(mr, red, DCTLUI_SLIDER_FLOAT, 0, -1, 1, 0)
 DEFINE_UI_PARAMS(mm, magenta, DCTLUI_SLIDER_FLOAT, 0, -1, 1, 0)
@@ -166,9 +207,11 @@ DEFINE_UI_PARAMS(mb, blue, DCTLUI_SLIDER_FLOAT, 0, -1, 1, 0)
 DEFINE_UI_PARAMS(mc, cyan, DCTLUI_SLIDER_FLOAT, 0, -1, 1, 0)
 DEFINE_UI_PARAMS(mg, green, DCTLUI_SLIDER_FLOAT, 0, -1, 1, 0)
 DEFINE_UI_PARAMS(str, strength, DCTLUI_SLIDER_FLOAT, 0.5, 0, 1, 0)
+DEFINE_UI_PARAMS(Loginput, LogZ Input, DCTLUI_CHECK_BOX, 1)
 
 __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B) {
     float3 curr_color = make_float3(p_R, p_G, p_B);
+     curr_color = Loginput?log2lin3(curr_color,-8.5,100):curr_color;
     float3 in = curr_color;
     
     float3 output;
@@ -223,6 +266,7 @@ __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p
     //output.x = alpha;
     //output.y = m;
     //mfp.x = alpha;
+      output = Loginput?lin2log3(output,-8.5,100):output;
 
     return output;
     //return mfp;
