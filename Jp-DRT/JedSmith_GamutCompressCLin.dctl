@@ -1,0 +1,38 @@
+#line 2
+/*  GamutComrpessClin 
+      A simple gamut compressor chromaticity linear
+    ---------------------------------------------------------------------------
+
+      Written by Jed Smith
+      Translated to dctl by Juan Pablo Zambrano
+      https://github.com/jedypod/nuke-colortools/blob/master/toolsets/chromaticity/GamutCompressCLin.nk
+
+
+    -------------------------------------------------
+*/
+DEFINE_UI_PARAMS(t0, threshold, DCTLUI_SLIDER_FLOAT, 0.8, 0, 1, 0)
+DEFINE_UI_PARAMS(x0, limit, DCTLUI_SLIDER_FLOAT, 1.4, 1.01, 2, 0)
+
+
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B) 
+{
+  float3 rgb = make_float3(p_R, p_G, p_B);
+  float3 out;
+  float y0 = 1.0f;
+  float s = (y0-t0)/_sqrtf(x0-y0);
+  float ox = t0-s*s/4;
+  float oy = t0-s*s/2;
+
+  float max = _fmaxf(rgb.x,_fmaxf(rgb.y,rgb.z));
+  float min = _fminf(rgb.x,_fminf(rgb.y,rgb.z));
+  float chroma = max==0.0f?0.0f:(max-min)/max;
+  float f = chroma<t0?1:(s*_sqrtf(chroma-ox)+oy)/chroma;
+
+  out.x = max*(1-f)+rgb.x*f;
+  out.y = max*(1-f)+rgb.y*f;
+  out.z = max*(1-f)+rgb.z*f;
+
+
+  return out;
+}
