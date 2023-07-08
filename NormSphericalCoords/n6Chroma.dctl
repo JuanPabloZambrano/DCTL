@@ -1,4 +1,11 @@
 #line 2
+/* HueFlight/Hue shift - v1
+	------------------------------------
+
+	----
+	Written by Juan Pablo Zambrano
+
+*/
 #define PI 3.1415926535897932384626
 
 
