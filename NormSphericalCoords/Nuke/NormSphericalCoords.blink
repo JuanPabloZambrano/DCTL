@@ -1,0 +1,440 @@
+kernel NormSpherical : ImageComputationKernel<ePixelWise>
+{
+  Image<eRead, eAccessPoint, eEdgeClamped> src; // the input image
+  Image<eWrite> dst; // the output image
+
+  param:
+    bool invert;
+    bool norm;
+
+
+  local:
+    float3x3 forward;
+    float3x3 inverse;
+
+  void define() {
+
+  }
+
+  // multiplies a 3D vector with a 3x3 matrix
+  float3 vector_dot( float3x3 m, float3 v)
+  {
+    float3 r = 1.0f;
+    for(int c = 0; c<3; c++)
+    {
+      r[c] = m[c][0]*v.x + m[c][1]*v.y + m[c][2]*v.z;
+    }
+
+    return r;
+  }
+ 
+    // "safe" div
+    float sdiv( float a, float b )
+    {
+        if(b == 0.0f)
+        {
+        return 0.0f;
+        }
+        else
+        {
+        return a / b;
+        }
+    }
+
+  float3 float3abs( float3 a )
+  {
+    return fabs(a);
+  }
+
+
+  float3 float3sign( float3 v )
+  {
+      return float3(sign(v.x), sign(v.y), sign(v.z));
+  }
+
+   // "safe" power function to avoid NANs or INFs when taking a fractional power of a negative base
+  // this one initially returned -pow(abs(b), e) for negative b
+  // but this ended up producing undesirable results in some cases
+  // so now it just returns 0.0 instead
+  
+  float spow( float base, float exponent )
+  {
+     return sign(base)*pow(fabs(base), exponent); 
+    }
+  
+
+    float3 float3spow( float3 base, float exponent )
+  {
+      return float3(spow(base.x, exponent), spow(base.y, exponent), spow(base.z, exponent));
+  }
+
+
+  // convert radians to degrees
+  float degrees( float radians )
+  {
+    return radians * 180.0f / PI;
+  }
+
+
+  // convert degrees to radians
+  float radians( float degrees )
+  {
+    return degrees / 180.0f * PI;
+  }
+
+  float mod(float a, float N)
+  {
+    return a - N*floor(a/N);
+  } 
+
+float3 NormChroma(float3 hcl){
+
+//float3x3 ConeMatrix = make_float3x3(make_float3(_sqrtf(6)/3.0f, -_sqrtf(6)/6.0f,-_sqrtf(6)/6.0f), make_float3(0.0f, _sqrtf(2)/2.0f, -_sqrtf(2)/2.0f), make_float3(_sqrtf(3)/3.0f,_sqrtf(3)/3.0f, _sqrtf(3)/3.0f));
+
+//float3x3 invConemtx = inv_f33(ConeMatrix);
+
+float green = 1/3.0f;
+float blue = 2.0f/3.0f;
+float red = 2.0f;
+float two = 0.25f;
+
+
+
+float anglein = hcl.x;
+float chroma = hcl.y;
+float value = hcl.z;
+
+
+float angle = hcl.x*2*PI;
+
+
+hcl.x = cos(angle);
+hcl.y = sin(angle);
+
+
+float slope = sdiv(hcl.y,hcl.x);
+
+float sig = anglein>0.5?-1:1;
+
+
+
+angle = angle/(2*PI);
+
+
+//find angle of complement
+float anglecomp = angle + 0.5f;
+anglecomp = angle>1.0f? angle - 1.0f:angle;
+
+
+float slope1 = (sqrt(6.0f)/3.0f)/(slope + (sqrt(6.0f)/(sqrt(2.0f)*3.0f)));
+float slope2 = (-sqrt(6.0f)/3.0f)/(slope - (sqrt(6.0f)/(sqrt(2.0f)*3.0f)));
+
+float compboundaryx = anglecomp >= 0.0f && anglecomp <= green?  slope1      : anglecomp > green && anglecomp <= blue? -sqrt(2.0f)/2.0f           :anglecomp>blue && anglecomp<=1.0f?slope2:1;
+float compboundaryy = anglecomp >= 0.0f && anglecomp <= green? slope1*slope : anglecomp > green && anglecomp <= blue?  -slope*sqrt(2.0f)/2.0f    :anglecomp>blue && anglecomp<=1.0f?slope2*slope:1;
+
+
+compboundaryx = anglein == 0.0f ? -sqrt(2.0f)/2.0f :angle == 0.5f ? sqrt(2.0f) : angle == 0.25f || angle == 0.75f ? 0.0f               :compboundaryx;
+compboundaryy = anglein == 0.0f ? 0.0f             :angle == 0.5f ? 0.0f         : angle == 0.25f || angle == 0.75f ? sig*sqrt(2.0f)  :compboundaryy;
+
+
+compboundaryy = anglein == 0.25? sqrt(6)/3:compboundaryy;
+compboundaryy = angle == 0.75?-sqrt(6)/3:compboundaryy;
+//compboundaryy = isnan(compboundaryy) && angle<0.5?-sqrt(6)/3:compboundaryy;
+compboundaryy = compboundaryy==-sqrt(6)/3 && angle<0.5?sqrt(6)/3:compboundaryy;
+compboundaryx = angle == 0.5f? -sqrt(2.0f)/2.0f:compboundaryx;
+compboundaryx = angle == 0.0f? sqrt(2.0f):compboundaryx;
+
+float boundaryx = compboundaryx;
+float boundaryy = compboundaryy;
+
+anglecomp = anglecomp + 0.5f;
+anglecomp = anglecomp>1.0f? anglecomp - 1.0f:anglecomp;
+
+compboundaryx = anglecomp >= 0.0f && anglecomp <= green?  slope1      : anglecomp > green && anglecomp <= blue? -sqrt(2.0f)/2.0f           :anglecomp>blue && anglecomp<=1.0f?slope2:1;
+compboundaryy = anglecomp >= 0.0f && anglecomp <= green? slope1*slope : anglecomp > green && anglecomp <= blue?  -slope*sqrt(2.0f)/2.0f    :anglecomp>blue && anglecomp<=1.0f?slope2*slope:1;
+
+compboundaryy = anglecomp == 0.25? sqrt(6)/3:compboundaryy;
+//compboundaryy = isnan(compboundaryy) && anglecomp>0.5?-sqrt(6)/3:compboundaryy;
+
+compboundaryy = value == 0.0f? 0.0f:compboundaryy;
+compboundaryx = value == 0.0f? 0.0f:compboundaryx;
+boundaryy = value == 0.0f? 0.0f:boundaryy;
+boundaryx = value == 0.0f? 0.0f:boundaryx;
+
+//boundaryy = isnan(boundaryy) && anglecomp<0.5f? -_sqrtf(6)/3:boundaryy;
+
+float Cnorm = sqrt(boundaryx*boundaryx+boundaryy*boundaryy);
+float Ccompnorm = sqrt(compboundaryx*compboundaryx+compboundaryy*compboundaryy);
+
+float coeff = 1.0f - (Cnorm)/(Cnorm+Ccompnorm);
+
+chroma = chroma*(atan2(sqrt(2.0f),1.0f));
+
+float3 chr;
+
+chr.x = cos(chroma);
+chr.y = sin(chroma);
+
+chroma = chr.y/chr.x;
+
+chroma = sdiv(chroma,Cnorm);
+
+
+float3 Out = float3(anglein,chroma,value);
+
+
+  return Out;
+
+}
+
+
+  
+
+  float3 RGBtoCone( float3 RGB,int normal)
+    {
+      
+        float red = 1.0f;
+        float green = 1.0f/3.0f;
+        float blue = 2.0f/3.0f;
+
+
+        // # Step 1
+
+        float maxval = max(RGB.x,max(RGB.y,RGB.z));
+
+        
+        float3 RGBin = RGB;
+        RGB.x = RGBin.x*sqrt(6.0f)/3.0f + RGBin.y*(-sqrt(6.0f)/6.0f) + RGBin.z*( -sqrt(6.0f)/6.0f);
+        RGB.y = RGBin.y*(sqrt(2.0f)/2.0f) + RGBin.z*( -sqrt(2.0f)/2.0f);
+        RGB.z = RGBin.x*sqrt(3.0f)/3.0f + RGBin.y*(sqrt(3.0f)/3.0f) + RGBin.z*(sqrt(3.0f)/3.0f);
+
+        // # Step 2
+        float slope =sdiv(RGB.y,RGB.x);
+
+        float slope1 = (sqrt(6.0f)/3.0f)/(slope + (sqrt(6.0f)/(sqrt(2.0f)*3.0f)));
+        float slope2 = (-sqrt(6.0f)/3.0f)/(slope - (sqrt(6.0f)/(sqrt(2.0f)*3.0f)));
+
+        RGB.y = sdiv(RGB.y,RGB.z);
+        RGB.x = sdiv(RGB.x,RGB.z);
+
+        float angle = (atan2(RGB.y, RGB.x))/(2.0f*PI);
+
+        angle = angle < 0.0f ? angle+ 1.0f:angle;
+
+        float Chroma = sqrt(RGB.y*RGB.y + RGB.x*RGB.x);
+        float ChromaAngle = (atan2(Chroma,1.0f))/(2*PI);
+
+        float anglecomp = angle + 0.5f;
+        anglecomp = anglecomp > 1.0f? anglecomp - 1.0f : anglecomp;
+
+        float boundaryx = angle >= 0.0f && angle <= green?  slope1      : angle > green && angle <= blue? -sqrt(2.0f)/2.0f                :angle>blue && angle<=1.0f?slope2:1.0f;
+        float boundaryy = angle >= 0.0f && angle <= green? slope1*slope : angle > green && angle <= blue?  -slope*sqrt(2.0f)/2.0f         :angle>blue && angle<=1.0f?slope2*slope:1.0f;
+
+        float compboundaryx = anglecomp >= 0.0f && anglecomp <= green?  slope1      : anglecomp > green && anglecomp <= blue? -sqrt(2.0f)/2.0f           :anglecomp>blue && anglecomp<=1.0f?slope2:1;
+        float compboundaryy = anglecomp >= 0.0f && anglecomp <= green? slope1*slope : anglecomp > green && anglecomp <= blue?  -slope*sqrt(2.0f)/2.0f    :anglecomp>blue && anglecomp<=1.0f?slope2*slope:1;
+
+        float sig = sign(RGB.y);
+
+        boundaryx     = RGB.y == 0.0f && RGB.x > 1.0f? sqrt(2.0f):RGB.y == 0.0f && RGB.x<1.0f? -sqrt(2.0f)/2.0f:RGB.y==0.0f? 0.0f            :boundaryx;
+        boundaryy     = RGB.y == 0.0f && RGB.x > 1.0f? 0.0f        :RGB.y == 0.0f && RGB.x<1.0f? 0.0f              :RGB.y==0.0f? sig*sqrt(2.0f):boundaryy;
+        
+
+        compboundaryx = RGB.y == 0.0f && RGB.x > 1.0f? -sqrt(2.0f)/2.0f :RGB.y == 0.0f && RGB.x<1.0f?sqrt(2.0f):RGB.y==0.0f? 0.0f               :compboundaryx;
+        compboundaryy = RGB.y == 0.0f && RGB.x > 1.0f? 0.0f               :RGB.y == 0.0f && RGB.x<1.0f?0.0f        :RGB.y==0.0f? -sig*sqrt(2.0f)  :compboundaryy;
+        
+
+        compboundaryy = RGB.z == 0.0f? 0.0f:compboundaryy;
+        compboundaryx = RGB.z == 0.0f? 0.0f:compboundaryx;
+        boundaryy = RGB.z == 0.0f? 0.0f:boundaryy;
+        boundaryx = RGB.z == 0.0f? 0.0f:boundaryx;
+
+        compboundaryy = Chroma == 0.0f? 0.0f:compboundaryy;
+        compboundaryx = Chroma == 0.0f? 0.0f:compboundaryx;
+        boundaryy = Chroma == 0.0f? 0.0f:boundaryy;
+        boundaryx = Chroma == 0.0f? 0.0f:boundaryx;
+
+        compboundaryx = angle==0.0f?-sqrt(2.0f)/2.0f:compboundaryx;
+
+        float Cnorm     = sqrt(boundaryx*boundaryx+boundaryy*boundaryy);
+        float Ccompnorm = sqrt(compboundaryx*compboundaryx+compboundaryy*compboundaryy);
+
+        float coeff = 1.0f - (Cnorm)/(Cnorm+Ccompnorm);
+
+        Chroma = Cnorm==0.0f? Chroma:Chroma/Cnorm;
+        Chroma = RGB.z == 0.0f? 0.0f:Chroma;
+
+        //float Chroman = Chroma;
+
+        coeff = coeff==0.0f?1:coeff/(coeff+(1-coeff)*Chroma);
+        
+
+        RGB.z = Chroma==0.0f?RGB.z/sqrt(3.0f):RGB.z/(coeff*sqrt(3.0f));
+
+        Chroma =  Chroma*Cnorm;
+
+        Chroma = atan2(Chroma,1);
+
+        float3 Out = float3(angle,Chroma/atan2(sqrt(2.0f),1.0f),maxval);
+        //RGB.z = isnan(RGB.z)?0.0f:RGB.z;
+
+        Out.x = Out.y<0.0000001f?0.0f:angle;
+
+        Out = normal==1?NormChroma(Out):Out;
+
+
+          return Out;
+  
+    }
+
+
+float3 ConetoRGB(float3 hcl,int normal){
+
+//float3x3 ConeMatrix = make_float3x3(make_float3(_sqrtf(6)/3.0f, -_sqrtf(6)/6.0f,-_sqrtf(6)/6.0f), make_float3(0.0f, _sqrtf(2)/2.0f, -_sqrtf(2)/2.0f), make_float3(_sqrtf(3)/3.0f,_sqrtf(3)/3.0f, _sqrtf(3)/3.0f));
+
+//float3x3 invConemtx = inv_f33(ConeMatrix);
+
+float green = 1/3.0f;
+float blue = 2.0f/3.0f;
+float red = 2.0f;
+float two = 0.25f;
+
+
+
+float anglein = hcl.x;
+float chroma = hcl.y;
+float value = hcl.z;
+
+
+float angle = hcl.x*2*PI;
+
+
+hcl.x = cos(angle);
+hcl.y = sin(angle);
+
+
+float slope = sdiv(hcl.y,hcl.x);
+
+float sig = anglein>0.5?-1:1;
+
+
+
+angle = angle/(2*PI);
+
+
+//find angle of complement
+float anglecomp = angle + 0.5f;
+anglecomp = angle>1.0f? angle - 1.0f:angle;
+
+
+float slope1 = (sqrt(6.0f)/3.0f)/(slope + (sqrt(6.0f)/(sqrt(2.0f)*3.0f)));
+float slope2 = (-sqrt(6.0f)/3.0f)/(slope - (sqrt(6.0f)/(sqrt(2.0f)*3.0f)));
+
+float compboundaryx = anglecomp >= 0.0f && anglecomp <= green?  slope1      : anglecomp > green && anglecomp <= blue? -sqrt(2.0f)/2.0f           :anglecomp>blue && anglecomp<=1.0f?slope2:1;
+float compboundaryy = anglecomp >= 0.0f && anglecomp <= green? slope1*slope : anglecomp > green && anglecomp <= blue?  -slope*sqrt(2.0f)/2.0f    :anglecomp>blue && anglecomp<=1.0f?slope2*slope:1;
+
+
+compboundaryx = anglein == 0.0f ? -sqrt(2.0f)/2.0f :angle == 0.5f ? sqrt(2.0f) : angle == 0.25f || angle == 0.75f ? 0.0f               :compboundaryx;
+compboundaryy = anglein == 0.0f ? 0.0f             :angle == 0.5f ? 0.0f         : angle == 0.25f || angle == 0.75f ? sig*sqrt(2.0f)  :compboundaryy;
+
+
+compboundaryy = anglein == 0.25? sqrt(6)/3:compboundaryy;
+compboundaryy = angle == 0.75?-sqrt(6)/3:compboundaryy;
+//compboundaryy = isnan(compboundaryy) && angle<0.5?-sqrt(6)/3:compboundaryy;
+compboundaryy = compboundaryy==-sqrt(6)/3 && angle<0.5?sqrt(6)/3:compboundaryy;
+compboundaryx = angle == 0.5f? -sqrt(2.0f)/2.0f:compboundaryx;
+compboundaryx = angle == 0.0f? sqrt(2.0f):compboundaryx;
+
+float boundaryx = compboundaryx;
+float boundaryy = compboundaryy;
+
+anglecomp = anglecomp + 0.5f;
+anglecomp = anglecomp>1.0f? anglecomp - 1.0f:anglecomp;
+
+compboundaryx = anglecomp >= 0.0f && anglecomp <= green?  slope1      : anglecomp > green && anglecomp <= blue? -sqrt(2.0f)/2.0f           :anglecomp>blue && anglecomp<=1.0f?slope2:1;
+compboundaryy = anglecomp >= 0.0f && anglecomp <= green? slope1*slope : anglecomp > green && anglecomp <= blue?  -slope*sqrt(2.0f)/2.0f    :anglecomp>blue && anglecomp<=1.0f?slope2*slope:1;
+
+compboundaryy = anglecomp == 0.25? sqrt(6)/3:compboundaryy;
+//compboundaryy = isnan(compboundaryy) && anglecomp>0.5?-sqrt(6)/3:compboundaryy;
+
+compboundaryy = value == 0.0f? 0.0f:compboundaryy;
+compboundaryx = value == 0.0f? 0.0f:compboundaryx;
+boundaryy = value == 0.0f? 0.0f:boundaryy;
+boundaryx = value == 0.0f? 0.0f:boundaryx;
+
+//boundaryy = isnan(boundaryy) && anglecomp<0.5f? -_sqrtf(6)/3:boundaryy;
+
+float Cnorm = sqrt(boundaryx*boundaryx+boundaryy*boundaryy);
+float Ccompnorm = sqrt(compboundaryx*compboundaryx+compboundaryy*compboundaryy);
+
+float coeff = 1.0f - (Cnorm)/(Cnorm+Ccompnorm);
+
+float normchroma = chroma;
+chroma = chroma*(atan2(sqrt(2.0f),1.0f));
+
+float3 chr;
+
+chr.x = cos(chroma);
+chr.y = sin(chroma);
+
+chroma = chr.y/chr.x;
+
+chroma = chroma/Cnorm;
+chroma = normal==1?normchroma:chroma; 
+
+
+coeff = coeff==0.0f?1:coeff/(coeff+(1-coeff)*chroma);
+value = value*coeff;
+value = hcl.z == 0.0f? 0.0f:value;
+
+chroma = chroma*Cnorm;
+//chroma = isnan(chroma)? 0.0f:chroma;
+
+float cx = hcl.x*chroma*value;
+float cy = hcl.y*chroma*value;
+
+float3 Out = float3(cx*sqrt(3),cy*sqrt(3),value*sqrt(3));
+float3 RGBin = Out;
+
+Out.x =  RGBin.x*(sqrt(6.0f)/3.0f) + RGBin.z*(sqrt(3.0f)/3.0f);
+Out.y = -RGBin.x*(sqrt(6.0f)/6.0f) + RGBin.y*(sqrt(2.0f)/2.0f) + RGBin.z*(sqrt(3.0f)/3.0f);
+Out.z = -RGBin.x*(sqrt(6.0f)/6.0f) - RGBin.y*(sqrt(2.0f)/2.0f) + RGBin.z*(sqrt(3.0f)/3.0f);
+
+Out = hcl.z == 0.0f? float3(0.0,0.0,0.0):Out;
+
+
+
+
+  return Out;
+
+}
+
+
+  // The init() function is run before any calls to process().
+  // Local variables can be initialized here.
+  void init() {
+
+
+  }
+
+  void process() {
+    // Read the input image
+    SampleType(src) input = src();
+
+    // Isolate the RGB components
+    float3 srcPixel(input.x, input.y, input.z);
+
+    float3 out = srcPixel;
+    
+
+
+      //out = RGBtoCone(srcPixel);
+      out = invert==1?ConetoRGB(srcPixel,norm):RGBtoCone(srcPixel,norm);
+
+
+
+    // Write the result to the output image
+    dst() = float4(out.x, out.y, out.z, input.w);
+  }
+};
+
+
