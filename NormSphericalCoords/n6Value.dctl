@@ -1,0 +1,279 @@
+#line 2
+
+/* n6Value - v1 
+------------------------------------ ---- 
+Written by Juan Pablo Zambrano
+*/
+#define PI 3.1415926535897932384626
+
+
+// matrix multiplication 
+__DEVICE__ float3 mv_33_3(float mat[3][3], float3 v) {
+    float3 out = make_float3(mat[0][0] * v.x + mat[0][1] * v.y + mat[0][2] * v.z,
+                             mat[1][0] * v.x + mat[1][1] * v.y + mat[1][2] * v.z,
+                             mat[2][0] * v.x + mat[2][1] * v.y + mat[2][2] * v.z);
+    return out;
+}
+
+
+
+
+__DEVICE__ float normalize_gain(float3 in) {
+
+	float3 out = in;
+	
+	float chroma = in.y;
+	float angle = (in.x)*2*PI;
+	angle = angle - PI/6;
+
+	chroma = chroma*_atan2f(_sqrtf(2.0f),1.0f);
+	out.y = _tanf(chroma)/_sqrtf(2.0f);
+	float chroma_gain = 1/(2*_cosf((_acosf(_sinf(3*(angle))))/3));
+
+
+    return chroma_gain;
+
+}
+
+
+__DEVICE__ float3 rgb_to_spherical(float3 x) {
+    
+    float3 in = x;
+    float norm = _fmaxf(in.x,_fmaxf(in.y,in.z));
+    float rot_mat[3][3] = {{_sqrtf(6.0f)/3.0f, -_sqrtf(6.0f)/6.0f, -_sqrtf(6.0f)/6.0f}, {0.0, _sqrtf(2.0f)/2.0f,-_sqrtf(2.0f)/2.0f}, {_sqrtf(3.0f)/3.0f, _sqrtf(3.0f)/3.0f, _sqrtf(3.0f)/3.0f}};
+
+    float3 rotated_color = mv_33_3(rot_mat, x);
+    float theta = _atan2f(rotated_color.y, rotated_color.x) / (2.0 * PI);
+
+    
+    float3 spherical = make_float3(0.0, 0.0, 0.0);
+	
+	spherical.x = theta < 0.0 ? theta + 1.0 : theta;
+	spherical.y = _sqrtf((rotated_color.x)*(rotated_color.x) + (rotated_color.y)*(rotated_color.y));
+	spherical.y = _atan2f(spherical.y,rotated_color.z)/_atan2f(_sqrtf(2.0f),1.0f);
+	spherical.z = norm;
+
+    
+    return spherical;
+}
+
+
+
+
+__DEVICE__ float3 spherical_to_cone(float3 in) {
+
+	float3 out = in;
+	
+	float chroma = in.y;
+	float angle = (in.x)*2*PI;
+	angle = angle - PI/6;
+
+	chroma = chroma*_atan2f(_sqrtf(2.0f),1.0f);
+	out.y = _tanf(chroma)/_sqrtf(2.0f);
+	float chroma_gain = normalize_gain(in);
+
+	out.y = out.y/chroma_gain;
+
+
+    return out;
+}
+
+
+__DEVICE__ float3 cone_to_spherical(float3 in) {
+
+	float3 out = in;
+	
+	float chroma = in.y;
+	float angle = (in.x)*2*PI;
+	angle = angle - PI/6;
+
+	chroma = chroma*_atan2f(_sqrtf(2.0f),1.0f);
+	out.y = _tanf(chroma)/_sqrtf(2.0f);
+	float chroma_gain = normalize_gain(in);
+
+	out.y = out.y*chroma_gain;
+
+
+    return out;
+}
+
+__DEVICE__ float3 cone_to_rgb(float3 in) {
+
+	float3 copy = in;
+	copy.x = copy.x + 0.5f;
+
+	float chroma_gain1 = normalize_gain(in);
+	float chroma_gain2 = normalize_gain(copy);
+
+	float norm_gain = (chroma_gain2+chroma_gain1*in.y)/chroma_gain2;
+
+	in.z = in.z/norm_gain;
+	in.y = in.y*chroma_gain1;
+
+	float3 out = in;
+
+	out.x = _cosf(in.x*2*PI)*in.y*in.z*_sqrtf(3)/(_sqrtf(2)/2);
+	out.y = _sinf(in.x*2*PI)*in.y*in.z*_sqrtf(3)/(_sqrtf(2)/2);
+	out.z = in.z*_sqrtf(3);
+
+	float rot_mat[3][3] = {{_sqrtf(6.0f)/3.0f, 0.0, _sqrtf(3.0f)/3.0f}, {-_sqrtf(6.0f)/6.0f, _sqrtf(2.0f)/2.0f,_sqrtf(3.0f)/3.0f}, {-_sqrtf(6.0f)/6.0f, -_sqrtf(2.0f)/2.0f, _sqrtf(3.0f)/3.0f}};
+
+    out = mv_33_3(rot_mat, out);
+
+
+    return out;
+}
+
+__DEVICE__ float3 spherical_to_rgb(float3 in) {
+
+	float3 copy = in;
+	copy.x = copy.x + 0.5f;
+
+	float chroma_gain1 = normalize_gain(in);
+	float chroma_gain2 = normalize_gain(copy);
+
+	in.y = _tanf(in.y*_atan2f(_sqrtf(2.0f),1.0f));
+	in.y = in.y/_sqrtf(2);
+	in.y = in.y/chroma_gain1;
+
+	float norm_gain = (chroma_gain2+chroma_gain1*in.y)/chroma_gain2;
+
+	in.z = in.z/norm_gain;
+	in.y = in.y*chroma_gain1;
+
+	float3 out = in;
+
+	out.x = _cosf(in.x*2*PI)*in.y*in.z*_sqrtf(3)/(_sqrtf(2)/2);
+	out.y = _sinf(in.x*2*PI)*in.y*in.z*_sqrtf(3)/(_sqrtf(2)/2);
+	out.z = in.z*_sqrtf(3);
+
+	float rot_mat[3][3] = {{_sqrtf(6.0f)/3.0f, 0.0, _sqrtf(3.0f)/3.0f}, {-_sqrtf(6.0f)/6.0f, _sqrtf(2.0f)/2.0f,_sqrtf(3.0f)/3.0f}, {-_sqrtf(6.0f)/6.0f, -_sqrtf(2.0f)/2.0f, _sqrtf(3.0f)/3.0f}};
+
+    out = mv_33_3(rot_mat, out);
+
+
+    return out;
+}
+
+// https://www.desmos.com/calculator/8tqz4rs0wm
+__DEVICE__ float power_window(float x, float c, float p0, float p1, float x0, float x1) {
+	return x > x1 ? 0.0f : x > c ? _powf(1.0f - _powf((x - c)/(x1 - c), p0), p1) : x > x0 ? _powf(1.0f - _powf((c - x)/(c - x0), p0), p1) : 0.0f;
+}
+__DEVICE__ float sdiv(float x, float c) {
+	return c==0?0:x/c;
+}
+
+
+__DEVICE__ float log2lin(float in,float mn,float mx) {
+   	
+   	float a = _powf(2,mn);
+   	float m2 = _log2f(mx/a+1)+mn;
+
+   	float out = in<0?in/(1/(_logf(2)*(m2-mn)*a)):_powf(2,in*(m2-mn)+mn)-a;
+   	
+    return out;
+}
+
+__DEVICE__ float lin2log(float in,float mn,float mx) {
+   	
+   	float a = _powf(2,mn);
+   	float m2 = _log2f(mx/a+1)+mn;
+
+   	float out = in<0?in/(_logf(2)*(m2-mn)*a):(_log2f(in+a)-mn)/(m2-mn);
+   	
+    return out;
+}
+
+__DEVICE__ float3 log2lin3(float3 in,float mn,float mx) {
+   		
+   		float3 out;
+   	out.x = log2lin(in.x,mn,mx);
+   	out.y = log2lin(in.y,mn,mx);
+   	out.z = log2lin(in.z,mn,mx);
+   	
+    return out;
+}
+
+__DEVICE__ float3 lin2log3(float3 in,float mn,float mx) {
+   	float3 out;
+   	out.x = lin2log(in.x,mn,mx);
+   	out.y = lin2log(in.y,mn,mx);
+   	out.z = lin2log(in.z,mn,mx);
+   	
+    return out;
+}
+
+
+
+DEFINE_UI_PARAMS(my, yellow, DCTLUI_SLIDER_FLOAT, 0, -1, 1, 0)
+DEFINE_UI_PARAMS(mr, red, DCTLUI_SLIDER_FLOAT, 0, -1, 1, 0)
+DEFINE_UI_PARAMS(mm, magenta, DCTLUI_SLIDER_FLOAT, 0, -1, 1, 0)
+DEFINE_UI_PARAMS(mb, blue, DCTLUI_SLIDER_FLOAT, 0, -1, 1, 0)
+DEFINE_UI_PARAMS(mc, cyan, DCTLUI_SLIDER_FLOAT, 0, -1, 1, 0)
+DEFINE_UI_PARAMS(mg, green, DCTLUI_SLIDER_FLOAT, 0, -1, 1, 0)
+DEFINE_UI_PARAMS(str, strength, DCTLUI_SLIDER_FLOAT, 0.5, 0, 1, 0)
+DEFINE_UI_PARAMS(Loginput, LogZ Input, DCTLUI_CHECK_BOX, 1)
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B) {
+    float3 curr_color = make_float3(p_R, p_G, p_B);
+     curr_color = Loginput?log2lin3(curr_color,-8.5,100):curr_color;
+    float3 in = curr_color;
+    
+    float3 output;
+    output = rgb_to_spherical(curr_color);
+ 	output = spherical_to_cone(output);
+ 	output.x = output.y<0.0001f?0:output.x;
+
+ 	float h = output.x*6.0f;
+ 	float ch = output.y;
+
+ 	// Extract hue angles
+
+ 	float hr = power_window(_fmod(h + 1.0f, 6.0f), 1.0f, 2.67f, 2.67f, 0.0f, 2.0f);
+	float hg = power_window(_fmod(h + 5.0f, 6.0f), 1.0f, 2.67f, 2.67f, 0.0f, 2.0f);
+	float hb = power_window(_fmod(h + 3.0f, 6.0f), 1.0f, 2.67f, 2.67f, 0.0f, 2.0f);
+	float hc = power_window(_fmod(h + 4.0f, 6.0f), 1.0f, 2.67f, 2.67f, 0.0f, 2.0f);
+	float hm = power_window(_fmod(h + 2.0f, 6.0f), 1.0f, 2.67f, 2.67f, 0.0f, 2.0f);
+	float hy = power_window(_fmod(h + 0.0f, 6.0f), 1.0f, 2.67f, 2.67f, 0.0f, 2.0f);
+
+	float3 hp = make_float3(hr,hg,hb);
+	float3 hs = make_float3(hc,hm,hy);
+
+   // Exposure - input param range is -1 to 1, output exposure is +/- 4 stops.
+  const float3 mp = make_float3(
+    _powf(2.0f, mr ),
+    _powf(2.0f, mg ),
+    _powf(2.0f, mb ));
+
+   const float3 ms = make_float3(
+    _powf(2.0f, mc ),
+    _powf(2.0f, mm ),
+    _powf(2.0f, my ));
+
+   // Multiplication factor: combine for all hue angles
+  float3 mfp = make_float3((1-hr)+hr*mp.x,(1-hg)+hg*mp.y,(1-hb)+hb*mp.z);
+
+  float3 mfs = make_float3((1-hc)+hc*ms.x,(1-hm)+hm*ms.y,(1-hy)+hy*ms.z);
+
+  float lmt = 0.0f;
+  float cs = _powf(ch,1/str);
+  //float cl = cs*_powf(1-cs,lmt);
+  float cl = cs;
+
+ 	float m = mfp.x*mfp.y*mfp.z*mfs.x*mfs.y*mfs.z;
+    float alpha = sdiv(cl,(cl*(1-m)+m));
+    alpha = 1-alpha;
+
+    output.x = m*curr_color.x*(1-alpha)+curr_color.x*(alpha);
+    output.y = m*curr_color.y*(1-alpha)+curr_color.y*(alpha);
+    output.z = m*curr_color.z*(1-alpha)+curr_color.z*(alpha);
+
+    //output.x = alpha;
+    //output.y = m;
+    //mfp.x = alpha;
+      output = Loginput?lin2log3(output,-8.5,100):output;
+
+    return output;
+    //return mfp;
+}
+
