@@ -1,0 +1,185 @@
+/* NormSphericalCoordinates - v1
+	------------------------------------
+	This color space is a modified version of spherical Coordinates/Chen.
+	The Luminance channel is modified to become MAX(rgb), just like in hsv,
+	the other difference is the option to make the saturation channel 0-1 for any ingamut color,
+	unlike the regular spherical model
+This is inspired by Steve Yedlins Cone Coordinates but it has two modes for the saturation channel
+	----
+	Written by Juan Pablo Zambrano
+
+*/
+
+DEFINE_UI_PARAMS(invert, Invert, DCTLUI_CHECK_BOX, 0)
+DEFINE_UI_PARAMS(norm_chroma, Normalize Chroma, DCTLUI_CHECK_BOX, 1)
+
+
+
+#define PI 3.1415926535897932384626
+
+
+// matrix multiplication 
+__DEVICE__ float3 mv_33_3(float mat[3][3], float3 v) {
+    float3 out = make_float3(mat[0][0] * v.x + mat[0][1] * v.y + mat[0][2] * v.z,
+                             mat[1][0] * v.x + mat[1][1] * v.y + mat[1][2] * v.z,
+                             mat[2][0] * v.x + mat[2][1] * v.y + mat[2][2] * v.z);
+    return out;
+}
+
+
+
+__DEVICE__ float normalize_gain(float3 in) {
+
+	float3 out = in;
+	
+	float chroma = in.y;
+	float angle = (in.x)*2*PI;
+	angle = angle - PI/6;
+
+	chroma = chroma*_atan2f(_sqrtf(2.0f),1.0f);
+	out.y = _tanf(chroma)/_sqrtf(2.0f);
+	float chroma_gain = 1/(2*_cosf((_acosf(_sinf(3*(angle))))/3));
+
+
+    return chroma_gain;
+
+}
+
+
+__DEVICE__ float3 rgb_to_spherical(float3 x) {
+    
+    float3 in = x;
+    float norm = _fmaxf(in.x,_fmaxf(in.y,in.z));
+    float rot_mat[3][3] = {{_sqrtf(6.0f)/3.0f, -_sqrtf(6.0f)/6.0f, -_sqrtf(6.0f)/6.0f}, {0.0, _sqrtf(2.0f)/2.0f,-_sqrtf(2.0f)/2.0f}, {_sqrtf(3.0f)/3.0f, _sqrtf(3.0f)/3.0f, _sqrtf(3.0f)/3.0f}};
+
+    float3 rotated_color = mv_33_3(rot_mat, x);
+    float theta = _atan2f(rotated_color.y, rotated_color.x) / (2.0 * PI);
+
+    
+    float3 spherical = make_float3(0.0, 0.0, 0.0);
+	
+	spherical.x = theta < 0.0 ? theta + 1.0 : theta;
+	spherical.y = _sqrtf((rotated_color.x)*(rotated_color.x) + (rotated_color.y)*(rotated_color.y));
+	spherical.y = _atan2f(spherical.y,rotated_color.z)/_atan2f(_sqrtf(2.0f),1.0f);
+	spherical.z = norm;
+
+    
+    return spherical;
+}
+
+
+
+
+__DEVICE__ float3 spherical_to_cone(float3 in) {
+
+	float3 out = in;
+	
+	float chroma = in.y;
+	float angle = (in.x)*2*PI;
+	angle = angle - PI/6;
+
+	chroma = chroma*_atan2f(_sqrtf(2.0f),1.0f);
+	out.y = _tanf(chroma)/_sqrtf(2.0f);
+	float chroma_gain = normalize_gain(in);
+
+	out.y = out.y/chroma_gain;
+
+
+    return out;
+}
+
+
+__DEVICE__ float3 cone_to_spherical(float3 in) {
+
+	float3 out = in;
+	
+	float chroma = in.y;
+	float angle = (in.x)*2*PI;
+	angle = angle - PI/6;
+
+	chroma = chroma*_atan2f(_sqrtf(2.0f),1.0f);
+	out.y = _tanf(chroma)/_sqrtf(2.0f);
+	float chroma_gain = normalize_gain(in);
+
+	out.y = out.y*chroma_gain;
+
+
+    return out;
+}
+
+__DEVICE__ float3 cone_to_rgb(float3 in) {
+
+	float3 copy = in;
+	copy.x = copy.x + 0.5f;
+
+	float chroma_gain1 = normalize_gain(in);
+	float chroma_gain2 = normalize_gain(copy);
+
+	float norm_gain = (chroma_gain2+chroma_gain1*in.y)/chroma_gain2;
+
+	in.z = in.z/norm_gain;
+	in.y = in.y*chroma_gain1;
+
+	float3 out = in;
+
+	out.x = _cosf(in.x*2*PI)*in.y*in.z*_sqrtf(3)/(_sqrtf(2)/2);
+	out.y = _sinf(in.x*2*PI)*in.y*in.z*_sqrtf(3)/(_sqrtf(2)/2);
+	out.z = in.z*_sqrtf(3);
+
+	float rot_mat[3][3] = {{_sqrtf(6.0f)/3.0f, 0.0, _sqrtf(3.0f)/3.0f}, {-_sqrtf(6.0f)/6.0f, _sqrtf(2.0f)/2.0f,_sqrtf(3.0f)/3.0f}, {-_sqrtf(6.0f)/6.0f, -_sqrtf(2.0f)/2.0f, _sqrtf(3.0f)/3.0f}};
+
+    out = mv_33_3(rot_mat, out);
+
+
+    return out;
+}
+
+__DEVICE__ float3 spherical_to_rgb(float3 in) {
+
+	float3 copy = in;
+	copy.x = copy.x + 0.5f;
+
+	float chroma_gain1 = normalize_gain(in);
+	float chroma_gain2 = normalize_gain(copy);
+
+	in.y = _tanf(in.y*_atan2f(_sqrtf(2.0f),1.0f));
+	in.y = in.y/_sqrtf(2);
+	in.y = in.y/chroma_gain1;
+
+	float norm_gain = (chroma_gain2+chroma_gain1*in.y)/chroma_gain2;
+
+	in.z = in.z/norm_gain;
+	in.y = in.y*chroma_gain1;
+
+	float3 out = in;
+
+	out.x = _cosf(in.x*2*PI)*in.y*in.z*_sqrtf(3)/(_sqrtf(2)/2);
+	out.y = _sinf(in.x*2*PI)*in.y*in.z*_sqrtf(3)/(_sqrtf(2)/2);
+	out.z = in.z*_sqrtf(3);
+
+	float rot_mat[3][3] = {{_sqrtf(6.0f)/3.0f, 0.0, _sqrtf(3.0f)/3.0f}, {-_sqrtf(6.0f)/6.0f, _sqrtf(2.0f)/2.0f,_sqrtf(3.0f)/3.0f}, {-_sqrtf(6.0f)/6.0f, -_sqrtf(2.0f)/2.0f, _sqrtf(3.0f)/3.0f}};
+
+    out = mv_33_3(rot_mat, out);
+
+
+    return out;
+}
+
+
+
+
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B) {
+    float3 curr_color = make_float3(p_R, p_G, p_B);
+    float3 output;
+    if (invert) {
+        output = norm_chroma==1?cone_to_rgb(curr_color):spherical_to_rgb(curr_color);
+    } else {
+        output = rgb_to_spherical(curr_color);
+ 		output = norm_chroma==1?spherical_to_cone(output):output;
+ 		output.x = output.y<0.0001f?0:output.x;
+    }
+    return output;
+}
+
+
