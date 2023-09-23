@@ -1,0 +1,57 @@
+#line 2
+/*Reversed calculated apple log transfer function, this is only valid for positive values, I haven't 
+calculated the curve for negative values
+*/
+DEFINE_UI_PARAMS(Direction, Direction, DCTLUI_COMBO_BOX, 1, {Log2Lin, Lin2Log}, {Log2Lin, Lin2Log})
+
+__DEVICE__ float log2lin(float in) {
+   	
+   	float a = 0.0125027f;
+   	float m2 = 4.56755f;
+    float c = 0.0842884f;
+    float m1 = -7.09326f;
+
+   	float out = _powf(2,(in-c)*(m2-m1)+m1)-a;
+   	
+    return out;
+}
+
+__DEVICE__ float lin2log(float in) {
+   	
+    float a = 0.0125027f;
+    float m2 = 4.56755f;
+    float c = 0.0842884f;
+    float m1 = -7.09326f;
+
+   	float out = (_log2f(in+a)-m1)/(m2-m1)+c;
+   	
+    return out;
+}
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B)
+{
+
+
+    float3 rgb = {p_R, p_G, p_B};
+
+switch (Direction) {
+        case Log2Lin:
+           
+            rgb.x = log2lin(rgb.x);
+            rgb.y = log2lin(rgb.y);
+            rgb.z = log2lin(rgb.z);
+
+            break;
+        
+        case Lin2Log:
+            rgb.x = lin2log(rgb.x);
+            rgb.y = lin2log(rgb.y);
+            rgb.z = lin2log(rgb.z);
+            
+            break;
+
+    }
+
+    return rgb;
+
+}
