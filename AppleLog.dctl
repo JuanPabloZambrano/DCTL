@@ -2,31 +2,38 @@
 /*Reversed calculated apple log transfer function, this is only valid for positive values, I haven't 
 calculated the curve for negative values
 */
-DEFINE_UI_PARAMS(Direction, Direction, DCTLUI_COMBO_BOX, 1, {Log2Lin, Lin2Log}, {Log2Lin, Lin2Log})
+DEFINE_UI_PARAMS(Direction, Direction, DCTLUI_COMBO_BOX, 0, {Log2Lin, Lin2Log}, {Log2Lin, Lin2Log})
+
+
 
 __DEVICE__ float log2lin(float in) {
-   	
-   	float a = 0.0125027f;
-   	float m2 = 4.56755f;
-    float c = 0.0842884f;
-    float m1 = -7.09326f;
+    
+    float R0 = -0.05641088f;
+    float Rt =  0.01f;
+    float c =  47.28711236f;
+    float beta = 0.00964052f;
+    float gamma = 0.08550479f;
+    float delta = 0.69336945f;
+    float Pt = c*(Rt-R0)*(Rt-R0);
 
-   	float out = _powf(2,(in-c)*(m2-m1)+m1)-a;
-   	
+    float out = in>=Pt?_powf(2,(in-delta)/gamma)-beta:in<0?R0:_sqrtf(in/c)+R0;
+    
     return out;
 }
-
 __DEVICE__ float lin2log(float in) {
-   	
-    float a = 0.0125027f;
-    float m2 = 4.56755f;
-    float c = 0.0842884f;
-    float m1 = -7.09326f;
+    
+    float R0 = -0.05641088f;
+    float Rt =  0.01f;
+    float c =  47.28711236f;
+    float beta = 0.00964052f;
+    float gamma = 0.08550479f;
+    float delta = 0.69336945f;
 
-   	float out = (_log2f(in+a)-m1)/(m2-m1)+c;
-   	
+    float out = in>=Rt?gamma*_log2f(in+beta)+delta:in<R0?0:c*(in-R0)*(in-R0);
+    
     return out;
 }
+
 
 __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B)
 {
@@ -55,3 +62,4 @@ switch (Direction) {
     return rgb;
 
 }
+
