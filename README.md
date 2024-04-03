@@ -1,8 +1,9 @@
 # DCTLS
 These are DCTLs that I have developed.
 
-Support me at: [https://www.buymeacoffee.com/jpzambrano](https://www.buymeacoffee.com/jpzambrano
-)
+Support me at: [https://www.buymeacoffee.com/jpzambrano](https://www.buymeacoffee.com/jpzambrano)
+ [paypal.me/jpzambrano99]( paypal.me/jpzambrano99)
+
 
 
 # Installation
