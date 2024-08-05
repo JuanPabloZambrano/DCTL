@@ -1,0 +1,461 @@
+#line 2
+
+
+typedef struct {
+        float3 x, y, z;
+} float3x3;
+
+// Helper function to create a float3x3
+__DEVICE__ float3x3 make_float3x3(float3 a, float3 b, float3 c) {
+    float3x3 d;
+    d.x = a, d.y = b, d.z = c;
+    return d;
+}
+
+
+// Gamut Conversion Matrices
+#define matrix_ap0_to_xyz make_float3x3(make_float3(0.93863094875f, -0.00574192055f, 0.017566898852f), make_float3(0.338093594922f, 0.727213902811f, -0.065307497733f), make_float3(0.000723121511f, 0.000818441849f, 1.0875161874f))
+#define matrix_ap1_to_xyz make_float3x3(make_float3(0.652418717672f, 0.127179925538f, 0.170857283842f), make_float3(0.268064059194f, 0.672464478993f, 0.059471461813f), make_float3(-0.00546992851f, 0.005182799977f, 1.08934487929f))
+#define matrix_rec709_to_xyz make_float3x3(make_float3(0.412390917540f, 0.357584357262f, 0.180480793118f), make_float3(0.212639078498f, 0.715168714523f, 0.072192311287f), make_float3(0.019330825657f, 0.119194783270f, 0.950532138348f))
+#define matrix_p3d65_to_xyz make_float3x3(make_float3(0.486571133137f, 0.265667706728f, 0.198217317462f), make_float3(0.228974640369f, 0.691738605499f, 0.079286918044f), make_float3(-0.000000000000f, 0.045113388449, 1.043944478035f))
+#define matrix_rec2020_to_xyz make_float3x3(make_float3(0.636958122253f, 0.144616916776f, 0.168880969286f), make_float3(0.262700229883f, 0.677998125553f, 0.059301715344f), make_float3(0.000000000000f, 0.028072696179, 1.060985088348f))
+#define matrix_arriwg3_to_xyz make_float3x3(make_float3(0.638007619284f, 0.214703856337f, 0.097744451431f), make_float3(0.291953779f, 0.823841041511f, -0.11579482051f), make_float3(0.002798279032f, -0.067034235689f, 1.15329370742f))
+#define matrix_arriwg4_to_xyz make_float3x3(make_float3(0.704858320407f, 0.12976029517f, 0.115837311474f), make_float3(0.254524176404f, 0.781477732712f, -0.036001909116f), make_float3(0.0f, 0.0f, 1.08905775076f))
+#define matrix_redwg_to_xyz make_float3x3(make_float3(0.735275208950f, 0.068609409034f, 0.146571278572f), make_float3(0.286694079638f, 0.842979073524f, -0.129673242569f), make_float3(-0.079680845141f, -0.347343206406, 1.516081929207f))
+#define matrix_sonysgamut3_to_xyz make_float3x3(make_float3(0.706482713192f, 0.128801049791f, 0.115172164069f), make_float3(0.270979670813f, 0.786606411221f, -0.057586082034f), make_float3(-0.009677845386f, 0.004600037493f, 1.09413555865f))
+#define matrix_sonysgamut3cine_to_xyz make_float3x3(make_float3(0.599083920758f, 0.248925516115f, 0.102446490178f), make_float3(0.215075820116f, 0.885068501744f, -0.100144321859f), make_float3(-0.032065849545f, -0.027658390679f, 1.14878199098f))
+#define matrix_vgamut_to_xyz make_float3x3(make_float3(0.679644469878f, 0.15221141244f, 0.118600044733), make_float3(0.26068555009f, 0.77489446333f, -0.03558001342), make_float3(-0.009310198218f, -0.004612467044f, 1.10298041602))
+#define matrix_bmdwg_to_xyz make_float3x3(make_float3(0.606538414955f, 0.220412746072f, 0.123504832387f), make_float3(0.267992943525f, 0.832748472691f, -0.100741356611f), make_float3(-0.029442556202f, -0.086612440646, 1.205112814903f))
+#define matrix_egamut_to_xyz make_float3x3(make_float3(0.705396831036f, 0.164041340351f, 0.081017754972f), make_float3(0.280130714178f, 0.820206701756f, -0.100337378681f), make_float3(-0.103781513870f, -0.072907261550, 1.265746593475f))
+#define matrix_davinciwg_to_xyz make_float3x3(make_float3(0.700622320175f, 0.148774802685f, 0.101058728993f), make_float3(0.274118483067f, 0.873631775379f, -0.147750422359f), make_float3(-0.098962903023f, -0.137895315886, 1.325916051865f))
+
+#define matrix_xyz_to_rec709 make_float3x3(make_float3(3.2409699419f, -1.53738317757f, -0.498610760293f), make_float3(-0.969243636281f, 1.87596750151f, 0.041555057407f), make_float3(0.055630079697f, -0.203976958889f, 1.05697151424f))
+#define matrix_xyz_to_p3d65 make_float3x3(make_float3(2.49349691194f, -0.931383617919f, -0.402710784451f), make_float3(-0.829488969562f, 1.76266406032f, 0.023624685842f), make_float3(0.035845830244f, -0.076172389268f, 0.956884524008f))
+#define matrix_xyz_to_rec2020 make_float3x3(make_float3(1.71665118797f, -0.355670783776f, -0.253366281374f), make_float3(-0.666684351832f, 1.61648123664f, 0.015768545814f), make_float3(0.017639857445f, -0.042770613258f, 0.942103121235f))
+#define inset                                                                                                                  \
+make_float3x3(make_float3(0.856627153315983, 0.0951212405381588, 0.0482516061458583),                                                                     \
+              make_float3(0.137318972929847, 0.761241990602591, 0.101439036467562),                                                                     \
+              make_float3(0.11189821299995, 0.0767994186031903, 0.811302368396859))
+
+#define outset                                                                                                                  \
+make_float3x3(make_float3(0.899796955911611, 0.0871996192028351, 0.013003424885555),                                                                     \
+              make_float3(0.11142098895748, 00.875575586156966, 0.0130034248855548),                                                                     \
+              make_float3(0.11142098895748, 0.0871996192028349, 0.801379391839686))
+
+
+__DEVICE__ inline float3x3 inv_f33(float3x3 m) {
+    float d = m.x.x * (m.y.y * m.z.z - m.z.y * m.y.z) - m.x.y * (m.y.x * m.z.z - m.y.z * m.z.x) + m.x.z * (m.y.x * m.z.y - m.y.y * m.z.x);
+    float id = 1.0f / d;
+    float3x3 c = make_float3x3(make_float3(1.0f, 0.0f, 0.0f), make_float3(0.0f, 1.0f, 0.0f), make_float3(0.0f, 0.0f, 1.0f));
+    c.x.x = id * (m.y.y * m.z.z - m.z.y * m.y.z);
+    c.x.y = id * (m.x.z * m.z.y - m.x.y * m.z.z);
+    c.x.z = id * (m.x.y * m.y.z - m.x.z * m.y.y);
+    c.y.x = id * (m.y.z * m.z.x - m.y.x * m.z.z);
+    c.y.y = id * (m.x.x * m.z.z - m.x.z * m.z.x);
+    c.y.z = id * (m.y.x * m.x.z - m.x.x * m.y.z);
+    c.z.x = id * (m.y.x * m.z.y - m.z.x * m.y.y);
+    c.z.y = id * (m.z.x * m.x.y - m.x.x * m.z.y);
+    c.z.z = id * (m.x.x * m.y.y - m.y.x * m.x.y);
+    return c;
+}
+
+__DEVICE__ inline float oetf_davinci_intermediate(float x, int inv) {
+    /* DaVinci Intermediate Log
+        https://documents.blackmagicdesign.com/InformationNotes/DaVinci_Resolve_17_Wide_Gamut_Intermediate.pdf
+    */
+
+    const float A = 0.0075f;
+    const float B = 7.0f;
+    const float C = 0.07329248f;
+    const float M = 10.44426855f;
+    const float LIN_CUT = 0.00262409f;
+    const float LOG_CUT = 0.02740668f;
+
+    if (inv == 1) {
+        return x <= LOG_CUT ? x / M : _exp2f(x / C - B) - A;
+    } else {
+        return x <= LIN_CUT ? x * M : (_log2f(x + A) + B) * C;
+    }
+}
+
+__DEVICE__ inline float3 vdot(float3x3 m, float3 v) {
+    return make_float3(
+        m.x.x * v.x + m.x.y * v.y + m.x.z * v.z,
+        m.y.x * v.x + m.y.y * v.y + m.y.z * v.z, 
+        m.z.x * v.x + m.z.y * v.y + m.z.z * v.z);
+}
+
+__DEVICE__ inline float dot(float3 m, float3 v) {
+    return (m.x * v.x + m.y * v.y + m.z * v.z);
+}
+
+__DEVICE__ inline float max3(float3 a) {
+    // For each component of float3 a, return max of component and float b
+    return _fmaxf(_fmaxf(a.x, a.y),a.z);
+}
+
+__DEVICE__ inline float min3(float3 a) {
+    // For each component of float3 a, return max of component and float b
+    return _fminf(_fminf(a.x, a.y),a.z);
+}
+
+
+__DEVICE__ float3 compensate_low_side(float3 rgb){
+    // Calculate original luminance
+
+    float3 luminance_coeffs = make_float3(0.2658180370250449, 0.59846986045365, 0.1357121025213052);
+    float Y = dot(luminance_coeffs,rgb);
+
+    // Calculate luminance of the opponent color, and use it to compensate for negative luminance values
+    float3 inverse_rgb = max3(rgb) - rgb;
+    float max_inverse = max3(inverse_rgb);
+    float Y_inverse_RGB = dot(luminance_coeffs,inverse_rgb);
+    float y_compensate_negative = (max_inverse - Y_inverse_RGB + Y);
+    Y = y_compensate_negative;
+    Y = Y < 1.e-2 ? y_compensate_negative: Y;
+
+    // Offset the input tristimulus such that there are no negatives
+    float min_rgb = min3(rgb);
+    float offset = _fmaxf(-min_rgb, 0.0);
+    float3 rgb_offset = rgb + offset;
+
+    // Calculate luminance of the opponent color, and use it to compensate for negative luminance values
+    float3 inverse_rgb_offset = max3(rgb_offset) - rgb_offset;
+    float max_inverse_rgb_offset = max3(inverse_rgb_offset);
+    float Y_inverse_RGB_offset = dot(inverse_rgb_offset, luminance_coeffs);
+    float Y_new = dot(rgb_offset, luminance_coeffs);
+    Y_new = (max_inverse_rgb_offset - Y_inverse_RGB_offset + Y_new);
+
+    // Compensate the intensity to match the original luminance
+    float luminance_ratio = Y_new > Y? Y / Y_new: 1.0;
+    float3 rgb_out = luminance_ratio * rgb_offset;
+    return rgb_out;
+}
+
+__DEVICE__ float3 compensate_low_side_rec709(float3 rgb){
+    // Calculate original luminance
+
+    float3 luminance_coeffs = make_float3(0.2658180370250449, 0.59846986045365, 0.1357121025213052);
+    float3 rec709 = vdot(matrix_rec709_to_xyz,rgb);
+    rec709 = vdot(matrix_xyz_to_rec2020,rec709);
+
+    float Y = dot(luminance_coeffs,rec709);
+
+    // Calculate luminance of the opponent color, and use it to compensate for negative luminance values
+    float3 inverse_rgb = max3(rgb) - rgb;
+    float max_inverse = max3(inverse_rgb);
+    float Y_inverse_RGB = dot(luminance_coeffs,inverse_rgb);
+    float y_compensate_negative = (max_inverse - Y_inverse_RGB + Y);
+    Y = y_compensate_negative;
+    Y = Y < 1.e-2 ? y_compensate_negative: Y;
+
+    // Offset the input tristimulus such that there are no negatives
+    float min_rgb = min3(rgb);
+    float offset = _fmaxf(-min_rgb, 0.0);
+    float3 rgb_offset = rgb + offset;
+
+    // Calculate luminance of the opponent color, and use it to compensate for negative luminance values
+    float3 inverse_rgb_offset = max3(rgb_offset) - rgb_offset;
+    float max_inverse_rgb_offset = max3(inverse_rgb_offset);
+    float Y_inverse_RGB_offset = dot(inverse_rgb_offset, luminance_coeffs);
+    float Y_new = dot(rgb_offset, luminance_coeffs);
+    Y_new = (max_inverse_rgb_offset - Y_inverse_RGB_offset + Y_new);
+
+    // Compensate the intensity to match the original luminance
+    float luminance_ratio = Y_new > Y? Y / Y_new: 1.0;
+    float3 rgb_out = luminance_ratio * rgb_offset;
+    return rgb_out;
+}
+
+__DEVICE__ float3 log2ocio(float3 rgb,float mg,float mn, float mx,float o,int inv) { 
+ 
+
+   if (inv == 1) {
+    
+    rgb.x = mg *_powf( 2.0f , rgb.x * (mx - mn) + mn) - o;
+    rgb.y = mg *_powf( 2.0f , rgb.y * (mx - mn) + mn) - o;
+    rgb.z = mg *_powf( 2.0f , rgb.z * (mx - mn) + mn) - o;
+
+  } else {
+
+    rgb.x = (_log2f(rgb.x/mg+o)-mn)/(mx-mn); 
+    rgb.y = (_log2f(rgb.y/mg+o)-mn)/(mx-mn); 
+    rgb.z = (_log2f(rgb.z/mg+o)-mn)/(mx-mn); 
+
+    rgb.x = _fmaxf(rgb.x,0.0);
+    rgb.y = _fmaxf(rgb.y,0.0);
+    rgb.z = _fmaxf(rgb.z,0.0);
+
+}
+  return rgb;
+}
+
+__DEVICE__ float3x3 identity() {
+  return make_float3x3(make_float3(1.0f, 0.0f, 0.0f), make_float3(0.0f, 1.0f, 0.0f), make_float3(0.0f, 0.0f, 1.0f));
+}
+
+__DEVICE__ float sigmoid(float in, float sp, float tp, float Pslope, float px, float py,float s0,float t0)
+  {
+  //calculate Shoulder
+    float ss =_powf(((_powf((Pslope*((s0-px)/(1-py))),sp)-1)*(_powf(Pslope*(s0-px),-sp))),-1/sp);
+    float ms = Pslope*(in-px)/ss;
+    float fs = ms/_powf(1+(_powf(ms,sp)),1/sp);
+
+  //calculate Toe
+    float ts =_powf(((_powf((Pslope*((px-t0)/(py))),tp)-1)*(_powf(Pslope*(px-t0),-tp))),-1/tp);
+    float mr = (Pslope*(in-px))/-ts;
+    float ft = mr/_powf(1+(_powf(mr,tp)),1/tp);
+
+    in = in>=px? ss*fs+py:-ts*ft+py;
+
+  return in;
+
+  }
+
+  __DEVICE__ float3 rgb_to_hsv(float3 rgb) {
+    float r = rgb.x;
+    float g = rgb.y;
+    float b = rgb.z;
+    float c_max = _fmaxf(_fmaxf(r, g), b);
+    float c_min = _fminf(_fminf(r, g), b);
+    float delta = c_max - c_min;
+
+    float H;
+    if (delta == 0.0f) {
+        H = 0.0f;
+    } else if (r >= g && r >= b) {
+        H = _fmod((g - b) / delta + 6.0f, (6.0f));
+    } else if (g >= r && g >= b) {
+        H = (b - r) / delta + (2.0f);
+    } else {
+        // b >= r && b >= g
+        H = (r - g) / delta + 4.0f;
+    }
+    H = H / 6.0f;
+
+    float S;
+    if (c_max == 0.0f) {
+        S = 0.0f;
+    } else {
+        S = delta / c_max;
+    }
+    float V = c_max;
+
+    float3 color = make_float3(H, S, V);
+    return color;
+}
+
+  __DEVICE__ float3 hsv_to_rgb(float3 hsv) {
+    float hue = hsv.x * 360.0;
+    float sat = hsv.y;
+    float val = hsv.z;
+
+    hue = _fmod(hue + 360.0, 360.0);
+
+    float c = val * sat;
+    float x = c * (1.0 - _fabs(_fmod(hue / 60.0, 2.0) - 1.0));
+    float m = val - c;
+    float3 rgbp = make_float3(0,0,0);
+    if (0.0 <= hue && hue < 60.0) {
+        rgbp = make_float3(c, x, 0.0);
+    } else if (60.0 <= hue && hue < 120.0) {
+        rgbp = make_float3(x, c, 0.0);
+    } else if (120.0 <= hue && hue < 180.0) {
+        rgbp = make_float3(0.0, c, x);
+    } else if (180.0 <= hue && hue < 240.0) {
+        rgbp = make_float3(0.0, x, c);
+    } else if (240.0 <= hue && hue < 300.0) {
+        rgbp = make_float3(x, 0.0, c);
+    } else if (300.0 < hue && hue < 360.0) {
+        rgbp = make_float3(c, 0.0, x);
+    }
+    return rgbp + m;
+}
+
+/* OETF Linearization Transfer Functions ---------------------------------------- */
+
+__DEVICE__ float oetf_davinci_intermediate(float x) {
+    return x <= 0.02740668f ? x/10.44426855f : _exp2f(x/0.07329248f - 7.0f) - 0.0075f;
+}
+
+__DEVICE__ float oetf_filmlight_tlog(float x) {
+  return x < 0.075f ? (x-0.075f)/16.184376489665897f : _expf((x - 0.5520126568606655f)/0.09232902596577353f) - 0.0057048244042473785f;
+}
+__DEVICE__ float oetf_arri_logc3(float x) {
+  return x < 5.367655f*0.010591f + 0.092809f ? (x - 0.092809f)/5.367655f : (_exp10f((x - 0.385537f)/0.247190f) - 0.052272f)/5.555556f;
+}
+
+__DEVICE__ float oetf_arri_logc4(float x) {
+  return x < -0.7774983977293537f ? x*0.3033266726886969f - 0.7774983977293537f : (_exp2f(14.0f*(x - 0.09286412512218964f)/0.9071358748778103f + 6.0f) - 64.0f)/2231.8263090676883f;
+}
+
+__DEVICE__ float oetf_panasonic_vlog(float x) {
+  return x < 0.181f ? (x - 0.125f)/5.6f : _exp10f((x - 0.598206f)/0.241514f) - 0.00873f;
+}
+
+__DEVICE__ float oetf_sony_slog3(float x) {
+  return x < 171.2102946929f/1023.0f ? (x*1023.0f - 95.0f)*0.01125f/(171.2102946929f - 95.0f) : (_exp10f(((x*1023.0f - 420.0f)/261.5f))*(0.18f + 0.01f) - 0.01f);
+}
+
+__DEVICE__ float oetf_fujifilm_flog(float x) {
+  return x < 0.1005377752f ? (x - 0.092864f)/8.735631f : (_exp10f(((x - 0.790453f)/0.344676f))/0.555556f - 0.009468f/0.555556f);
+}
+
+
+__DEVICE__ float3 linearize(float3 rgb, int tf) {
+  if (tf == 0) { // Linear
+    return rgb;
+  } else if (tf == 1) { // Davinci Intermediate
+    rgb.x = oetf_davinci_intermediate(rgb.x);
+    rgb.y = oetf_davinci_intermediate(rgb.y);
+    rgb.z = oetf_davinci_intermediate(rgb.z);
+  } else if (tf == 2) { // Filmlight T-Log
+    rgb.x = oetf_filmlight_tlog(rgb.x);
+    rgb.y = oetf_filmlight_tlog(rgb.y);
+    rgb.z = oetf_filmlight_tlog(rgb.z);
+  } else if (tf == 3) { // Arri LogC3
+    rgb.x = oetf_arri_logc3(rgb.x);
+    rgb.y = oetf_arri_logc3(rgb.y);
+    rgb.z = oetf_arri_logc3(rgb.z);
+  } else if (tf == 4) { // Arri LogC4
+    rgb.x = oetf_arri_logc4(rgb.x);
+    rgb.y = oetf_arri_logc4(rgb.y);
+    rgb.z = oetf_arri_logc4(rgb.z);
+  } else if (tf == 5) { // Panasonic V-Log
+    rgb.x = oetf_panasonic_vlog(rgb.x);
+    rgb.y = oetf_panasonic_vlog(rgb.y);
+    rgb.z = oetf_panasonic_vlog(rgb.z);
+  } else if (tf == 6) { // Sony S-Log3
+    rgb.x = oetf_sony_slog3(rgb.x);
+    rgb.y = oetf_sony_slog3(rgb.y);
+    rgb.z = oetf_sony_slog3(rgb.z);
+  } else if (tf == 7) { // Fuji F-Log
+    rgb.x = oetf_fujifilm_flog(rgb.x);
+    rgb.y = oetf_fujifilm_flog(rgb.y);
+    rgb.z = oetf_fujifilm_flog(rgb.z);
+  }
+  return rgb;
+}
+
+DEFINE_UI_PARAMS(in_gamut, in gamut, DCTLUI_COMBO_BOX, 5, {i_xyz, i_ap0, i_ap1, i_p3d65, i_rec2020, i_rec709, i_awg3, i_awg4, i_rwg, i_sgamut3, i_sgamut3cine, i_vgamut, i_bmdwg, i_egamut, i_davinciwg}, {XYZ, ACES 2065-1, ACEScg, P3D65, Rec.2020, Rec.709, Arri Wide Gamut 3, Arri Wide Gamut 4, Red Wide Gamut RGB, Sony SGamut3, Sony SGamut3Cine, Panasonic V-Gamut, Blackmagic Wide Gamut, Filmlight E-Gamut, DaVinci Wide Gamut})
+DEFINE_UI_PARAMS(in_oetf, in transfer function, DCTLUI_COMBO_BOX, 0, {ioetf_linear, ioetf_davinci_intermediate, ioetf_filmlight_tlog, ioetf_arri_logc3, ioetf_arri_logc4, ioetf_panasonic_vlog, ioetf_sony_slog3, ioetf_fuji_flog}, {Linear, Davinci Intermediate, Filmlight T-Log, Arri LogC3, Arri LogC4, Panasonic V-Log, Sony S-Log3, Fuji F-Log})
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B) {
+
+    //stops below and above middle grey for log encoding
+    float mn = -10;
+    float mx = 6.5;
+    
+    //calculate middle grey of log encoding
+    float mglog =  -mn/(mx-mn);
+
+    //display power/gamma
+    float power = 2.4;
+
+    //display 18% grey, needed for the sigmoid calculation
+    float displaymg = _powf(0.18,1/power);
+
+    //Default setting in ocio config for sigmoid
+    //Shoulder Power
+    float sp = 1.5;
+    //Toe Power
+    float tp = 1.5;
+    //Fulcrum slope
+    float slope = 2.4;
+    
+
+    float3x3 in_to_xyz;
+  if (in_gamut == i_xyz) in_to_xyz = identity();
+  else if (in_gamut == i_ap0) in_to_xyz = matrix_ap0_to_xyz;
+  else if (in_gamut == i_ap1) in_to_xyz = matrix_ap1_to_xyz;
+  else if (in_gamut == i_p3d65) in_to_xyz = matrix_p3d65_to_xyz;
+  else if (in_gamut == i_rec2020) in_to_xyz = matrix_rec2020_to_xyz;
+  else if (in_gamut == i_rec709) in_to_xyz = matrix_rec709_to_xyz;
+  else if (in_gamut == i_awg3) in_to_xyz = matrix_arriwg3_to_xyz;
+  else if (in_gamut == i_awg4) in_to_xyz = matrix_arriwg4_to_xyz;
+  else if (in_gamut == i_rwg) in_to_xyz = matrix_redwg_to_xyz;
+  else if (in_gamut == i_sgamut3) in_to_xyz = matrix_sonysgamut3_to_xyz;
+  else if (in_gamut == i_sgamut3cine) in_to_xyz = matrix_sonysgamut3cine_to_xyz;
+  else if (in_gamut == i_vgamut) in_to_xyz = matrix_vgamut_to_xyz;
+  else if (in_gamut == i_bmdwg) in_to_xyz = matrix_bmdwg_to_xyz;
+  else if (in_gamut == i_egamut) in_to_xyz = matrix_egamut_to_xyz;
+  else if (in_gamut == i_davinciwg) in_to_xyz = matrix_davinciwg_to_xyz;
+
+
+  // Linearize if a non-linear input oetf / transfer function is selected
+  int oetf;
+  if (in_oetf == ioetf_linear) oetf = 0;
+  if (in_oetf == ioetf_davinci_intermediate) oetf = 1;
+  if (in_oetf == ioetf_filmlight_tlog) oetf = 2;
+  if (in_oetf == ioetf_arri_logc3) oetf = 3;
+  if (in_oetf == ioetf_arri_logc4) oetf = 4;
+  if (in_oetf == ioetf_panasonic_vlog) oetf = 5;
+  if (in_oetf == ioetf_sony_slog3) oetf = 6;
+  if (in_oetf == ioetf_fuji_flog) oetf = 7;
+
+    
+    float3 rgb = make_float3(p_R, p_G, p_B);
+    rgb = linearize(rgb, oetf);
+
+    // Convert into display gamut
+    rgb = vdot(in_to_xyz, rgb);
+
+    // rgb = log2ocio(rgb,0.18,-10,15,0,1);
+
+    // rgb = vdot(egamut_to_xyz_d65,rgb);
+
+    rgb = vdot(matrix_xyz_to_rec2020,rgb);
+
+    rgb = compensate_low_side(rgb);
+
+    rgb = vdot(inset,rgb);
+
+    float pre_form_hsv = rgb_to_hsv(rgb).x;
+
+    rgb = log2ocio(rgb,0.18,mn,mx,0,0);
+
+    //Apply sigmoid
+    rgb.x = sigmoid(rgb.x, sp, tp, slope, mglog, displaymg,1,0);
+    rgb.y = sigmoid(rgb.y, sp, tp, slope, mglog, displaymg,1,0);
+    rgb.z = sigmoid(rgb.z, sp, tp, slope, mglog, displaymg,1,0);
+
+    rgb.x = _powf(rgb.x,power);
+    rgb.y = _powf(rgb.y,power);
+    rgb.z = _powf(rgb.z,power);
+
+    float3 hsv = rgb_to_hsv(rgb);
+
+    hsv.x = _mix(pre_form_hsv,hsv.x,0.4);
+
+    rgb = hsv_to_rgb(hsv);
+
+    rgb = vdot(inv_f33(outset),rgb);
+
+    rgb.x = _fmaxf(rgb.x,0);
+    rgb.y = _fmaxf(rgb.y,0);
+    rgb.z = _fmaxf(rgb.z,0);
+
+    rgb.x = _fminf(rgb.x,1);
+    rgb.y = _fminf(rgb.y,1);
+    rgb.z = _fminf(rgb.z,1);
+
+    rgb = vdot(inv_f33(matrix_xyz_to_rec2020),rgb);
+    rgb = vdot(matrix_xyz_to_rec709,rgb);
+
+    rgb = compensate_low_side_rec709(rgb);
+
+    rgb.x = _fmaxf(rgb.x,0);
+    rgb.y = _fmaxf(rgb.y,0);
+    rgb.z = _fmaxf(rgb.z,0);
+
+    rgb.x = _fminf(rgb.x,1);
+    rgb.y = _fminf(rgb.y,1);
+    rgb.z = _fminf(rgb.z,1);
+
+
+    rgb.x = _powf(rgb.x,1/power);
+    rgb.y = _powf(rgb.y,1/power);
+    rgb.z = _powf(rgb.z,1/power);
+
+    return rgb;
+}
