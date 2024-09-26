@@ -104,12 +104,13 @@ __DEVICE__ float3 compensate_low_side(float3 rgb){
     // Calculate original luminance
 
     float3 luminance_coeffs = make_float3(0.2658180370250449, 0.59846986045365, 0.1357121025213052);
-    float Y = dot(luminance_coeffs,rgb);
+    float Y = luminance_coeffs.x *rgb.x + luminance_coeffs.y *rgb.y + luminance_coeffs.z *rgb.z;
+
 
     // Calculate luminance of the opponent color, and use it to compensate for negative luminance values
     float3 inverse_rgb = max3(rgb) - rgb;
     float max_inverse = max3(inverse_rgb);
-    float Y_inverse_RGB = dot(luminance_coeffs,inverse_rgb);
+    float Y_inverse_RGB = luminance_coeffs.x *inverse_rgb.x + luminance_coeffs.y *inverse_rgb.y + luminance_coeffs.z *inverse_rgb.z;
     float y_compensate_negative = (max_inverse - Y_inverse_RGB + Y);
     Y = y_compensate_negative;
     Y = Y < 1.e-2 ? y_compensate_negative: Y;
@@ -122,8 +123,9 @@ __DEVICE__ float3 compensate_low_side(float3 rgb){
     // Calculate luminance of the opponent color, and use it to compensate for negative luminance values
     float3 inverse_rgb_offset = max3(rgb_offset) - rgb_offset;
     float max_inverse_rgb_offset = max3(inverse_rgb_offset);
-    float Y_inverse_RGB_offset = dot(inverse_rgb_offset, luminance_coeffs);
-    float Y_new = dot(rgb_offset, luminance_coeffs);
+    float Y_inverse_RGB_offset = luminance_coeffs.x *inverse_rgb_offset.x + luminance_coeffs.y *inverse_rgb_offset.y + luminance_coeffs.z *inverse_rgb_offset.z;
+    y_compensate_negative = (max_inverse - Y_inverse_RGB + Y);
+    float Y_new = luminance_coeffs.x *rgb_offset.x + luminance_coeffs.y *rgb_offset.y + luminance_coeffs.z *rgb_offset.z;
     Y_new = (max_inverse_rgb_offset - Y_inverse_RGB_offset + Y_new);
 
     // Compensate the intensity to match the original luminance
@@ -139,12 +141,12 @@ __DEVICE__ float3 compensate_low_side_rec709(float3 rgb){
     float3 rec709 = vdot(matrix_rec709_to_xyz,rgb);
     rec709 = vdot(matrix_xyz_to_rec2020,rec709);
 
-    float Y = dot(luminance_coeffs,rec709);
+    float Y = rec709.x * luminance_coeffs.x + rec709.y * luminance_coeffs.y + rec709.z * luminance_coeffs.z;
 
     // Calculate luminance of the opponent color, and use it to compensate for negative luminance values
     float3 inverse_rgb = max3(rgb) - rgb;
     float max_inverse = max3(inverse_rgb);
-    float Y_inverse_RGB = dot(luminance_coeffs,inverse_rgb);
+    float Y_inverse_RGB = luminance_coeffs.x *inverse_rgb.x + luminance_coeffs.y *inverse_rgb.y + luminance_coeffs.z *inverse_rgb.z;
     float y_compensate_negative = (max_inverse - Y_inverse_RGB + Y);
     Y = y_compensate_negative;
     Y = Y < 1.e-2 ? y_compensate_negative: Y;
@@ -157,8 +159,8 @@ __DEVICE__ float3 compensate_low_side_rec709(float3 rgb){
     // Calculate luminance of the opponent color, and use it to compensate for negative luminance values
     float3 inverse_rgb_offset = max3(rgb_offset) - rgb_offset;
     float max_inverse_rgb_offset = max3(inverse_rgb_offset);
-    float Y_inverse_RGB_offset = dot(inverse_rgb_offset, luminance_coeffs);
-    float Y_new = dot(rgb_offset, luminance_coeffs);
+    float Y_inverse_RGB_offset = luminance_coeffs.x *inverse_rgb_offset.x + luminance_coeffs.y *inverse_rgb_offset.y + luminance_coeffs.z *inverse_rgb_offset.z;
+    float Y_new = luminance_coeffs.x *rgb_offset.x + luminance_coeffs.y *rgb_offset.y + luminance_coeffs.z *rgb_offset.z;
     Y_new = (max_inverse_rgb_offset - Y_inverse_RGB_offset + Y_new);
 
     // Compensate the intensity to match the original luminance
@@ -337,9 +339,8 @@ __DEVICE__ float3 linearize(float3 rgb, int tf) {
   return rgb;
 }
 
-DEFINE_UI_PARAMS(in_gamut, in gamut, DCTLUI_COMBO_BOX, 5, {i_xyz, i_ap0, i_ap1, i_p3d65, i_rec2020, i_rec709, i_awg3, i_awg4, i_rwg, i_sgamut3, i_sgamut3cine, i_vgamut, i_bmdwg, i_egamut, i_davinciwg}, {XYZ, ACES 2065-1, ACEScg, P3D65, Rec.2020, Rec.709, Arri Wide Gamut 3, Arri Wide Gamut 4, Red Wide Gamut RGB, Sony SGamut3, Sony SGamut3Cine, Panasonic V-Gamut, Blackmagic Wide Gamut, Filmlight E-Gamut, DaVinci Wide Gamut})
-DEFINE_UI_PARAMS(in_oetf, in transfer function, DCTLUI_COMBO_BOX, 0, {ioetf_linear, ioetf_davinci_intermediate, ioetf_filmlight_tlog, ioetf_arri_logc3, ioetf_arri_logc4, ioetf_panasonic_vlog, ioetf_sony_slog3, ioetf_fuji_flog}, {Linear, Davinci Intermediate, Filmlight T-Log, Arri LogC3, Arri LogC4, Panasonic V-Log, Sony S-Log3, Fuji F-Log})
-DEFINE_UI_PARAMS(mixture, Mix Hue, DCTLUI_SLIDER_FLOAT,0.4, .0, 1, 0.0)
+DEFINE_UI_PARAMS(in_gamut, in gamut, DCTLUI_COMBO_BOX, 14, {i_xyz, i_ap0, i_ap1, i_p3d65, i_rec2020, i_rec709, i_awg3, i_awg4, i_rwg, i_sgamut3, i_sgamut3cine, i_vgamut, i_bmdwg, i_egamut, i_davinciwg}, {XYZ, ACES 2065-1, ACEScg, P3D65, Rec.2020, Rec.709, Arri Wide Gamut 3, Arri Wide Gamut 4, Red Wide Gamut RGB, Sony SGamut3, Sony SGamut3Cine, Panasonic V-Gamut, Blackmagic Wide Gamut, Filmlight E-Gamut, DaVinci Wide Gamut})
+DEFINE_UI_PARAMS(in_oetf, in transfer function, DCTLUI_COMBO_BOX, 1, {ioetf_linear, ioetf_davinci_intermediate, ioetf_filmlight_tlog, ioetf_arri_logc3, ioetf_arri_logc4, ioetf_panasonic_vlog, ioetf_sony_slog3, ioetf_fuji_flog}, {Linear, Davinci Intermediate, Filmlight T-Log, Arri LogC3, Arri LogC4, Panasonic V-Log, Sony S-Log3, Fuji F-Log})
 
 __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B) {
 
@@ -394,6 +395,16 @@ __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p
   if (in_oetf == ioetf_sony_slog3) oetf = 6;
   if (in_oetf == ioetf_fuji_flog) oetf = 7;
 
+    int display;
+  if (in_oetf == ioetf_linear) oetf = 0;
+  if (in_oetf == ioetf_davinci_intermediate) oetf = 1;
+  if (in_oetf == ioetf_filmlight_tlog) oetf = 2;
+  if (in_oetf == ioetf_arri_logc3) oetf = 3;
+  if (in_oetf == ioetf_arri_logc4) oetf = 4;
+  if (in_oetf == ioetf_panasonic_vlog) oetf = 5;
+  if (in_oetf == ioetf_sony_slog3) oetf = 6;
+  if (in_oetf == ioetf_fuji_flog) oetf = 7;
+
     
     float3 rgb = make_float3(p_R, p_G, p_B);
     rgb = linearize(rgb, oetf);
@@ -426,7 +437,7 @@ __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p
 
     float3 hsv = rgb_to_hsv(rgb);
 
-    hsv.x = _mix(pre_form_hsv,hsv.x,mixture);
+    hsv.x = _mix(pre_form_hsv,hsv.x,0.4);
 
     rgb = hsv_to_rgb(hsv);
 
@@ -452,7 +463,6 @@ __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p
     rgb.x = _fminf(rgb.x,1);
     rgb.y = _fminf(rgb.y,1);
     rgb.z = _fminf(rgb.z,1);
-
 
     rgb.x = _powf(rgb.x,1/power);
     rgb.y = _powf(rgb.y,1/power);
