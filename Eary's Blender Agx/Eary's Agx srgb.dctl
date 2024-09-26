@@ -350,7 +350,7 @@ __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p
     float mglog =  -mn/(mx-mn);
 
     //display power/gamma
-    float power = 2.4;
+    float power = 2.2;
 
     //display 18% grey, needed for the sigmoid calculation
     float displaymg = _powf(0.18,1/power);
@@ -451,7 +451,6 @@ __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p
     rgb.x = _fminf(rgb.x,1);
     rgb.y = _fminf(rgb.y,1);
     rgb.z = _fminf(rgb.z,1);
-
 
     rgb.x = _powf(rgb.x,1/power);
     rgb.y = _powf(rgb.y,1/power);
