@@ -85,9 +85,10 @@ __DEVICE__ inline float3 vdot(float3x3 m, float3 v) {
         m.z.x * v.x + m.z.y * v.y + m.z.z * v.z);
 }
 
-__DEVICE__ inline float dot(float3 m, float3 v) {
+__DEVICE__ inline float dot3(float3 m, float3 v) {
     return (m.x * v.x + m.y * v.y + m.z * v.z);
 }
+
 
 __DEVICE__ inline float max3(float3 a) {
     // For each component of float3 a, return max of component and float b
@@ -100,17 +101,17 @@ __DEVICE__ inline float min3(float3 a) {
 }
 
 
-__DEVICE__ float3 compensate_low_side(float3 rgb){
+__DEVICE__ float3 compensate_low_side_rec2020(float3 rgb){
     // Calculate original luminance
 
     float3 luminance_coeffs = make_float3(0.2658180370250449, 0.59846986045365, 0.1357121025213052);
-    float Y = luminance_coeffs.x *rgb.x + luminance_coeffs.y *rgb.y + luminance_coeffs.z *rgb.z;
+    float Y = luminance_coeffs.x * rgb.x + luminance_coeffs.y * rgb.y + luminance_coeffs.z * rgb.z;
 
 
     // Calculate luminance of the opponent color, and use it to compensate for negative luminance values
     float3 inverse_rgb = max3(rgb) - rgb;
     float max_inverse = max3(inverse_rgb);
-    float Y_inverse_RGB = luminance_coeffs.x *inverse_rgb.x + luminance_coeffs.y *inverse_rgb.y + luminance_coeffs.z *inverse_rgb.z;
+    float Y_inverse_RGB = luminance_coeffs.x * inverse_rgb.x + luminance_coeffs.y * inverse_rgb.y + luminance_coeffs.z * inverse_rgb.z;
     float y_compensate_negative = (max_inverse - Y_inverse_RGB + Y);
     Y = y_compensate_negative;
     Y = Y < 1.e-2 ? y_compensate_negative: Y;
@@ -138,18 +139,16 @@ __DEVICE__ float3 compensate_low_side_rec709(float3 rgb){
     // Calculate original luminance
 
     float3 luminance_coeffs = make_float3(0.2658180370250449, 0.59846986045365, 0.1357121025213052);
-    float3 rec709 = vdot(matrix_rec709_to_xyz,rgb);
-    rec709 = vdot(matrix_xyz_to_rec2020,rec709);
 
-    float Y = rec709.x * luminance_coeffs.x + rec709.y * luminance_coeffs.y + rec709.z * luminance_coeffs.z;
+    float Y = dot3(vdot(matrix_xyz_to_rec2020,vdot(matrix_rec709_to_xyz,rgb)),luminance_coeffs);
 
     // Calculate luminance of the opponent color, and use it to compensate for negative luminance values
     float3 inverse_rgb = max3(rgb) - rgb;
     float max_inverse = max3(inverse_rgb);
-    float Y_inverse_RGB = luminance_coeffs.x *inverse_rgb.x + luminance_coeffs.y *inverse_rgb.y + luminance_coeffs.z *inverse_rgb.z;
+    float Y_inverse_RGB = dot3(vdot(matrix_xyz_to_rec2020,vdot(matrix_rec709_to_xyz,inverse_rgb)),luminance_coeffs);
     float y_compensate_negative = (max_inverse - Y_inverse_RGB + Y);
-    Y = y_compensate_negative;
-    Y = Y < 1.e-2 ? y_compensate_negative: Y;
+    Y = _mix(y_compensate_negative,Y,_fminf(_fmaxf(_powf(Y,0.08),0.0f),1.0));
+    
 
     // Offset the input tristimulus such that there are no negatives
     float min_rgb = min3(rgb);
@@ -159,12 +158,14 @@ __DEVICE__ float3 compensate_low_side_rec709(float3 rgb){
     // Calculate luminance of the opponent color, and use it to compensate for negative luminance values
     float3 inverse_rgb_offset = max3(rgb_offset) - rgb_offset;
     float max_inverse_rgb_offset = max3(inverse_rgb_offset);
-    float Y_inverse_RGB_offset = luminance_coeffs.x *inverse_rgb_offset.x + luminance_coeffs.y *inverse_rgb_offset.y + luminance_coeffs.z *inverse_rgb_offset.z;
-    float Y_new = luminance_coeffs.x *rgb_offset.x + luminance_coeffs.y *rgb_offset.y + luminance_coeffs.z *rgb_offset.z;
-    Y_new = (max_inverse_rgb_offset - Y_inverse_RGB_offset + Y_new);
+
+    float Y_inverse_RGB_offset = dot3(vdot(matrix_xyz_to_rec2020,vdot(matrix_rec709_to_xyz,inverse_rgb_offset)),luminance_coeffs);
+    float Y_new = dot3(vdot(matrix_xyz_to_rec2020,vdot(matrix_rec709_to_xyz,rgb_offset)),luminance_coeffs);
+    float Y_new_compensate_negative = (max_inverse_rgb_offset - Y_inverse_RGB_offset + Y_new);
+    Y_new = _mix(Y_new_compensate_negative,Y_new,_fminf(_fmaxf(_powf(Y_new,0.08),0.0f),1.0));
 
     // Compensate the intensity to match the original luminance
-    float luminance_ratio = Y_new > Y? Y / Y_new: 1.0;
+    float luminance_ratio = Y_new > Y? Y / _fmaxf(Y_new,1.e-100): 1.0;
     float3 rgb_out = luminance_ratio * rgb_offset;
     return rgb_out;
 }
@@ -352,10 +353,10 @@ __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p
     float mglog =  -mn/(mx-mn);
 
     //display power/gamma
-    float power = 2.2;
+    float power = 2.4;
 
     //display 18% grey, needed for the sigmoid calculation
-    float displaymg = _powf(0.18,1/power);
+    float displaymg = _powf(0.18,1/2.4);
 
     //Default setting in ocio config for sigmoid
     //Shoulder Power
@@ -407,18 +408,16 @@ __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p
 
     
     float3 rgb = make_float3(p_R, p_G, p_B);
+
+    float3 in = rgb;
+
     rgb = linearize(rgb, oetf);
 
-    // Convert into display gamut
     rgb = vdot(in_to_xyz, rgb);
-
-    // rgb = log2ocio(rgb,0.18,-10,15,0,1);
-
-    // rgb = vdot(egamut_to_xyz_d65,rgb);
 
     rgb = vdot(matrix_xyz_to_rec2020,rgb);
 
-    rgb = compensate_low_side(rgb);
+    rgb = compensate_low_side_rec2020(rgb);
 
     rgb = vdot(inset,rgb);
 
@@ -431,9 +430,9 @@ __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p
     rgb.y = sigmoid(rgb.y, sp, tp, slope, mglog, displaymg,1,0);
     rgb.z = sigmoid(rgb.z, sp, tp, slope, mglog, displaymg,1,0);
 
-    rgb.x = _powf(rgb.x,power);
-    rgb.y = _powf(rgb.y,power);
-    rgb.z = _powf(rgb.z,power);
+    rgb.x = _powf(rgb.x,2.4);
+    rgb.y = _powf(rgb.y,2.4);
+    rgb.z = _powf(rgb.z,2.4);
 
     float3 hsv = rgb_to_hsv(rgb);
 
@@ -464,9 +463,11 @@ __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p
     rgb.y = _fminf(rgb.y,1);
     rgb.z = _fminf(rgb.z,1);
 
-    rgb.x = _powf(rgb.x,1/power);
-    rgb.y = _powf(rgb.y,1/power);
-    rgb.z = _powf(rgb.z,1/power);
+    rgb.x = _powf(rgb.x,1/2.2);
+    rgb.y = _powf(rgb.y,1/2.2);
+    rgb.z = _powf(rgb.z,1/2.2);
+
+
 
     return rgb;
 }
