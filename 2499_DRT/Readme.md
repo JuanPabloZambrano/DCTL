@@ -37,7 +37,7 @@ The rest of the operations are a sigmoid, and a final purity matrix, this matrix
 
 # Some Projects Graded under 2499
 
-[The Man Who Could Not Remain Silent - Short Film](https://www.festival-cannes.com/en/f/the-man-who-could-not-remain-silent/)
+[The Man Who Could Not Remain Silent - Short Film - Multiple Award Winner](https://www.festival-cannes.com/en/f/the-man-who-could-not-remain-silent/)
 
 [Pokemon Go - Teaser Trailer - Colorist: Juan Pablo Zambrano](https://www.youtube.com/watch?v=OZGerzRXzUE)
 
