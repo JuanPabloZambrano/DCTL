@@ -37,6 +37,8 @@ The rest of the operations are a sigmoid, and a final purity matrix, this matrix
 
 # Some Projects Graded under 2499
 
+[El Refugio Atomico - TV Series - Colorist: Juandi Aznar for Netflix España](https://www.youtube.com/watch?v=BPsqqp-WDPw)
+
 [The Man Who Could Not Remain Silent - Short Film - Multiple Award Winner](https://www.festival-cannes.com/en/f/the-man-who-could-not-remain-silent/)
 
 [Pokemon Go - Teaser Trailer - Colorist: Juan Pablo Zambrano](https://www.youtube.com/watch?v=OZGerzRXzUE)
@@ -60,7 +62,7 @@ The rest of the operations are a sigmoid, and a final purity matrix, this matrix
 
 [Just North - Short Film - Colorist: Nathan Sexton](https://nathansextoncolour.com/portfolios/just-north/)
 
-[Gold Mining - Documentary - Colorsit: Nathan Sexton](https://nathansextoncolour.com/portfolios/africa-gold-mining-documentary/)
+[Gold Mining - Documentary - Colorist: Nathan Sexton](https://nathansextoncolour.com/portfolios/africa-gold-mining-documentary/)
 
 [Mama by Kolby Cooper - Music Video - Colorist: Dan Diaz](https://www.instagram.com/p/C9QirQDvzZc/?img_index=1)
 
